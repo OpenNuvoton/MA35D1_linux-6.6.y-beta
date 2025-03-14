@@ -722,21 +722,22 @@
 	};
 
 	gmac0: ethernet@40120000 {
-		compatible = "nuvoton,ma35d1-gmac";
+		compatible = "nuvoton,ma35d1-dwmac";
 		reg = <0x0 0x40120000 0x0 0x10000>;
 		interrupts = <GIC_SPI 23 IRQ_TYPE_LEVEL_HIGH>;
 		interrupt-names = "macirq";
-		phy-mode = "rgmii-id";
-		nuvoton,ma35d1-sys = <&sys>;
 		clocks = <&clk EMAC0_GATE>, <&clk EPLL_DIV8>;
 		clock-names = "stmmaceth", "ptp_ref";
+
+		nuvoton,sys = <&sys 0>;
 		resets = <&reset MA35D1_RESET_GMAC0>;
 		reset-names = "stmmaceth";
-		mac-id = <0>;
-		clk_csr = <4>;
-		status = "disable";
+
+		phy-mode = "rgmii-id";
 		phy-handle = <&eth_phy0>;
-		mdio0 {
+		status = "disabled";
+
+		mdio0: mdio {
 			compatible = "snps,dwmac-mdio";
 			#address-cells = <1>;
 			#size-cells = <0>;
@@ -745,25 +746,25 @@
 				reg = <1>;
 			};
 		};
-
 	};
 
 	gmac1: ethernet@40130000 {
-		compatible = "nuvoton,ma35d1-gmac";
+		compatible = "nuvoton,ma35d1-dwmac";
 		reg = <0x0 0x40130000 0x0 0x10000>;
 		interrupts = <GIC_SPI 24 IRQ_TYPE_LEVEL_HIGH>;
 		interrupt-names = "macirq";
-		phy-mode = "rgmii-id";
-		nuvoton,ma35d1-sys = <&sys>;
 		clocks = <&clk EMAC1_GATE>, <&clk EPLL_DIV8>;
 		clock-names = "stmmaceth", "ptp_ref";
+
+		nuvoton,sys = <&sys 1>;
 		resets = <&reset MA35D1_RESET_GMAC1>;
 		reset-names = "stmmaceth";
-		mac-id = <1>;
-		clk_csr = <4>;
-		status = "disable";
+
+		phy-mode = "rgmii-id";
 		phy-handle = <&eth_phy1>;
-		mdio1 {
+		status = "disabled";
+
+		mdio1: mdio {
 			compatible = "snps,dwmac-mdio";
 			#address-cells = <1>;
 			#size-cells = <0>;
@@ -772,7 +773,6 @@
 				reg = <1>;
 			};
 		};
-
 	};
 
 	pinctrl: pinctrl {
