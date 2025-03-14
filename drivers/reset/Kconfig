@@ -15,6 +15,13 @@ menuconfig RESET_CONTROLLER
 
 if RESET_CONTROLLER
 
+config RESET_MA35D1
+	bool "MA35D1 Reset Driver"
+	default ARCH_MA35D1
+	help
+	  This enables the reset controller driver for MA35D1
+	  Say Y if you want to control reset signals provided by SYS registers.
+
 config RESET_A10SR
 	tristate "Altera Arria10 System Resource Reset"
 	depends on MFD_ALTERA_A10SR || COMPILE_TEST

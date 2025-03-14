@@ -1,199 +1,109 @@
-// SPDX-License-Identifier: GPL-2.0-only
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2023 Nuvoton Technology Corp.
- * Author: Chi-Fang Li <cfli0@nuvoton.com>
+ * Copyright (C) 2020 Nuvoton Technology Corp.
  */
 
-#include <linux/bits.h>
-#include <linux/container_of.h>
 #include <linux/device.h>
 #include <linux/err.h>
+#include <linux/mfd/syscon.h>
 #include <linux/io.h>
-#include <linux/kernel.h>
 #include <linux/of.h>
 #include <linux/platform_device.h>
-#include <linux/reboot.h>
 #include <linux/reset-controller.h>
-#include <linux/spinlock.h>
+#include <linux/mfd/ma35d1-sys.h>
 #include <dt-bindings/reset/nuvoton,ma35d1-reset.h>
+#include <linux/reboot.h>
+
+#define RST_PRE_REG	32
 
 struct ma35d1_reset_data {
-	struct reset_controller_dev rcdev;
-	struct notifier_block restart_handler;
-	void __iomem *base;
-	/* protect registers against concurrent read-modify-write */
-	spinlock_t lock;
+	struct reset_controller_dev	rcdev;
+	struct regmap			*regmap;
 };
 
-static const struct {
-	u32 reg_ofs;
-	u32 bit;
-} ma35d1_reset_map[] = {
-	[MA35D1_RESET_CHIP] =    {0x20, 0},
-	[MA35D1_RESET_CA35CR0] = {0x20, 1},
-	[MA35D1_RESET_CA35CR1] = {0x20, 2},
-	[MA35D1_RESET_CM4] =     {0x20, 3},
-	[MA35D1_RESET_PDMA0] =   {0x20, 4},
-	[MA35D1_RESET_PDMA1] =   {0x20, 5},
-	[MA35D1_RESET_PDMA2] =   {0x20, 6},
-	[MA35D1_RESET_PDMA3] =   {0x20, 7},
-	[MA35D1_RESET_DISP] =    {0x20, 9},
-	[MA35D1_RESET_VCAP0] =   {0x20, 10},
-	[MA35D1_RESET_VCAP1] =   {0x20, 11},
-	[MA35D1_RESET_GFX] =     {0x20, 12},
-	[MA35D1_RESET_VDEC] =    {0x20, 13},
-	[MA35D1_RESET_WHC0] =    {0x20, 14},
-	[MA35D1_RESET_WHC1] =    {0x20, 15},
-	[MA35D1_RESET_GMAC0] =   {0x20, 16},
-	[MA35D1_RESET_GMAC1] =   {0x20, 17},
-	[MA35D1_RESET_HWSEM] =   {0x20, 18},
-	[MA35D1_RESET_EBI] =     {0x20, 19},
-	[MA35D1_RESET_HSUSBH0] = {0x20, 20},
-	[MA35D1_RESET_HSUSBH1] = {0x20, 21},
-	[MA35D1_RESET_HSUSBD] =  {0x20, 22},
-	[MA35D1_RESET_USBHL] =   {0x20, 23},
-	[MA35D1_RESET_SDH0] =    {0x20, 24},
-	[MA35D1_RESET_SDH1] =    {0x20, 25},
-	[MA35D1_RESET_NAND] =    {0x20, 26},
-	[MA35D1_RESET_GPIO] =    {0x20, 27},
-	[MA35D1_RESET_MCTLP] =   {0x20, 28},
-	[MA35D1_RESET_MCTLC] =   {0x20, 29},
-	[MA35D1_RESET_DDRPUB] =  {0x20, 30},
-	[MA35D1_RESET_TMR0] =    {0x24, 2},
-	[MA35D1_RESET_TMR1] =    {0x24, 3},
-	[MA35D1_RESET_TMR2] =    {0x24, 4},
-	[MA35D1_RESET_TMR3] =    {0x24, 5},
-	[MA35D1_RESET_I2C0] =    {0x24, 8},
-	[MA35D1_RESET_I2C1] =    {0x24, 9},
-	[MA35D1_RESET_I2C2] =    {0x24, 10},
-	[MA35D1_RESET_I2C3] =    {0x24, 11},
-	[MA35D1_RESET_QSPI0] =   {0x24, 12},
-	[MA35D1_RESET_SPI0] =    {0x24, 13},
-	[MA35D1_RESET_SPI1] =    {0x24, 14},
-	[MA35D1_RESET_SPI2] =    {0x24, 15},
-	[MA35D1_RESET_UART0] =   {0x24, 16},
-	[MA35D1_RESET_UART1] =   {0x24, 17},
-	[MA35D1_RESET_UART2] =   {0x24, 18},
-	[MA35D1_RESET_UART3] =   {0x24, 19},
-	[MA35D1_RESET_UART4] =   {0x24, 20},
-	[MA35D1_RESET_UART5] =   {0x24, 21},
-	[MA35D1_RESET_UART6] =   {0x24, 22},
-	[MA35D1_RESET_UART7] =   {0x24, 23},
-	[MA35D1_RESET_CANFD0] =  {0x24, 24},
-	[MA35D1_RESET_CANFD1] =  {0x24, 25},
-	[MA35D1_RESET_EADC0] =   {0x24, 28},
-	[MA35D1_RESET_I2S0] =    {0x24, 29},
-	[MA35D1_RESET_SC0] =     {0x28, 0},
-	[MA35D1_RESET_SC1] =     {0x28, 1},
-	[MA35D1_RESET_QSPI1] =   {0x28, 4},
-	[MA35D1_RESET_SPI3] =    {0x28, 6},
-	[MA35D1_RESET_EPWM0] =   {0x28, 16},
-	[MA35D1_RESET_EPWM1] =   {0x28, 17},
-	[MA35D1_RESET_QEI0] =    {0x28, 22},
-	[MA35D1_RESET_QEI1] =    {0x28, 23},
-	[MA35D1_RESET_ECAP0] =   {0x28, 26},
-	[MA35D1_RESET_ECAP1] =   {0x28, 27},
-	[MA35D1_RESET_CANFD2] =  {0x28, 28},
-	[MA35D1_RESET_ADC0] =    {0x28, 31},
-	[MA35D1_RESET_TMR4] =    {0x2C, 0},
-	[MA35D1_RESET_TMR5] =    {0x2C, 1},
-	[MA35D1_RESET_TMR6] =    {0x2C, 2},
-	[MA35D1_RESET_TMR7] =    {0x2C, 3},
-	[MA35D1_RESET_TMR8] =    {0x2C, 4},
-	[MA35D1_RESET_TMR9] =    {0x2C, 5},
-	[MA35D1_RESET_TMR10] =   {0x2C, 6},
-	[MA35D1_RESET_TMR11] =   {0x2C, 7},
-	[MA35D1_RESET_UART8] =   {0x2C, 8},
-	[MA35D1_RESET_UART9] =   {0x2C, 9},
-	[MA35D1_RESET_UART10] =  {0x2C, 10},
-	[MA35D1_RESET_UART11] =  {0x2C, 11},
-	[MA35D1_RESET_UART12] =  {0x2C, 12},
-	[MA35D1_RESET_UART13] =  {0x2C, 13},
-	[MA35D1_RESET_UART14] =  {0x2C, 14},
-	[MA35D1_RESET_UART15] =  {0x2C, 15},
-	[MA35D1_RESET_UART16] =  {0x2C, 16},
-	[MA35D1_RESET_I2S1] =    {0x2C, 17},
-	[MA35D1_RESET_I2C4] =    {0x2C, 18},
-	[MA35D1_RESET_I2C5] =    {0x2C, 19},
-	[MA35D1_RESET_EPWM2] =   {0x2C, 20},
-	[MA35D1_RESET_ECAP2] =   {0x2C, 21},
-	[MA35D1_RESET_QEI2] =    {0x2C, 22},
-	[MA35D1_RESET_CANFD3] =  {0x2C, 23},
-	[MA35D1_RESET_KPI] =     {0x2C, 24},
-	[MA35D1_RESET_GIC] =     {0x2C, 28},
-	[MA35D1_RESET_SSMCC] =   {0x2C, 30},
-	[MA35D1_RESET_SSPCC] =   {0x2C, 31}
+struct ma35d1_reboot_data {
+	struct notifier_block		restart_handler;
+	struct regmap			*regmap;
 };
 
-static int ma35d1_restart_handler(struct notifier_block *this, unsigned long mode, void *cmd)
+static int ma35d1_restart_handler(struct notifier_block *this,
+				unsigned long mode, void *cmd)
 {
-	struct ma35d1_reset_data *data =
-				 container_of(this, struct ma35d1_reset_data, restart_handler);
-	u32 id = MA35D1_RESET_CHIP;
+	struct ma35d1_reboot_data *data =
+			container_of(this, struct ma35d1_reboot_data,
+					restart_handler);
+	ma35d1_reg_unlock();
+	regmap_write(data->regmap, REG_SYS_IPRST0, 1 << MA35D1_RESET_CHIP);
+	ma35d1_reg_lock();
 
-	writel_relaxed(BIT(ma35d1_reset_map[id].bit),
-		       data->base + ma35d1_reset_map[id].reg_ofs);
-	return 0;
+	while (1)
+		cpu_do_idle();
+
+	return NOTIFY_DONE;
 }
 
-static int ma35d1_reset_update(struct reset_controller_dev *rcdev, unsigned long id, bool assert)
+
+static int ma35d1_reset_update(struct reset_controller_dev *rcdev,
+			      unsigned long id, bool assert)
 {
 	struct ma35d1_reset_data *data = container_of(rcdev, struct ma35d1_reset_data, rcdev);
-	unsigned long flags;
-	u32 reg;
+	int reg;
+	int offset = (id / RST_PRE_REG) * 4;
 
-	if (WARN_ON_ONCE(id >= ARRAY_SIZE(ma35d1_reset_map)))
-		return -EINVAL;
-
-	spin_lock_irqsave(&data->lock, flags);
-	reg = readl_relaxed(data->base + ma35d1_reset_map[id].reg_ofs);
+	ma35d1_reg_unlock();
+	regmap_read(data->regmap, REG_SYS_IPRST0 + offset, &reg);
 	if (assert)
-		reg |= BIT(ma35d1_reset_map[id].bit);
+		reg |= 1 << (id % RST_PRE_REG);
 	else
-		reg &= ~(BIT(ma35d1_reset_map[id].bit));
-	writel_relaxed(reg, data->base + ma35d1_reset_map[id].reg_ofs);
-	spin_unlock_irqrestore(&data->lock, flags);
+		reg &= ~(1 << (id % RST_PRE_REG));
 
+	regmap_write(data->regmap, REG_SYS_IPRST0 + offset, reg);
+
+	ma35d1_reg_lock();
 	return 0;
 }
 
-static int ma35d1_reset_assert(struct reset_controller_dev *rcdev, unsigned long id)
+static int ma35d1_reset_assert(struct reset_controller_dev *rcdev,
+			      unsigned long id)
 {
 	return ma35d1_reset_update(rcdev, id, true);
 }
 
-static int ma35d1_reset_deassert(struct reset_controller_dev *rcdev, unsigned long id)
+static int ma35d1_reset_deassert(struct reset_controller_dev *rcdev,
+				unsigned long id)
 {
 	return ma35d1_reset_update(rcdev, id, false);
 }
 
-static int ma35d1_reset_status(struct reset_controller_dev *rcdev, unsigned long id)
+static int ma35d1_reset_status(struct reset_controller_dev *rcdev,
+			      unsigned long id)
 {
 	struct ma35d1_reset_data *data = container_of(rcdev, struct ma35d1_reset_data, rcdev);
-	u32 reg;
+	int reg;
+	int offset = id / RST_PRE_REG;
 
-	if (WARN_ON_ONCE(id >= ARRAY_SIZE(ma35d1_reset_map)))
-		return -EINVAL;
+	regmap_read(data->regmap, REG_SYS_IPRST0 + offset, &reg);
 
-	reg = readl_relaxed(data->base + ma35d1_reset_map[id].reg_ofs);
-	return !!(reg & BIT(ma35d1_reset_map[id].bit));
+	return !!(reg & BIT(id % RST_PRE_REG));
+
 }
 
 static const struct reset_control_ops ma35d1_reset_ops = {
-	.assert = ma35d1_reset_assert,
-	.deassert = ma35d1_reset_deassert,
-	.status = ma35d1_reset_status,
+	.assert		= ma35d1_reset_assert,
+	.deassert	= ma35d1_reset_deassert,
+	.status		= ma35d1_reset_status,
 };
 
 static const struct of_device_id ma35d1_reset_dt_ids[] = {
-	{ .compatible = "nuvoton,ma35d1-reset" },
-	{ },
+	{ .compatible = "nuvoton,ma35d1-reset"},
+	{},
 };
 
 static int ma35d1_reset_probe(struct platform_device *pdev)
 {
-	struct ma35d1_reset_data *reset_data;
 	struct device *dev = &pdev->dev;
+	struct ma35d1_reset_data *reset_data;
+	struct ma35d1_reboot_data *reboot_data;
 	int err;
 
 	if (!pdev->dev.of_node) {
@@ -205,29 +115,45 @@ static int ma35d1_reset_probe(struct platform_device *pdev)
 	if (!reset_data)
 		return -ENOMEM;
 
-	reset_data->base = devm_platform_ioremap_resource(pdev, 0);
-	if (IS_ERR(reset_data->base))
-		return PTR_ERR(reset_data->base);
+	reboot_data = devm_kzalloc(dev, sizeof(*reboot_data), GFP_KERNEL);
+	if (!reboot_data)
+		return -ENOMEM;
+
+	reset_data->regmap  = syscon_regmap_lookup_by_phandle(pdev->dev.of_node,
+								"nuvoton,ma35d1-sys");
+	if (IS_ERR(reset_data->regmap)) {
+		dev_err(&pdev->dev, "Failed to get SYS register base\n");
+		return -ENODEV;
+	}
+
+	reboot_data->regmap  = syscon_regmap_lookup_by_phandle(pdev->dev.of_node,
+								"nuvoton,ma35d1-sys");
+	if (IS_ERR(reboot_data->regmap)) {
+		dev_err(&pdev->dev, "Failed to get SYS register base\n");
+		return -ENODEV;
+	}
 
 	reset_data->rcdev.owner = THIS_MODULE;
 	reset_data->rcdev.nr_resets = MA35D1_RESET_COUNT;
 	reset_data->rcdev.ops = &ma35d1_reset_ops;
 	reset_data->rcdev.of_node = dev->of_node;
-	reset_data->restart_handler.notifier_call = ma35d1_restart_handler;
-	reset_data->restart_handler.priority = 192;
-	spin_lock_init(&reset_data->lock);
 
-	err = register_restart_handler(&reset_data->restart_handler);
-	if (err)
-		dev_warn(&pdev->dev, "failed to register restart handler\n");
+	reboot_data->restart_handler.notifier_call = ma35d1_restart_handler;
+	reboot_data->restart_handler.priority = 192;
+
+	err = register_restart_handler(&reboot_data->restart_handler);
+	if (err) {
+		dev_err(&pdev->dev, "cannot register restart handler (err=%d)\n", err);
+		return -ENODEV;
+	}
 
 	return devm_reset_controller_register(dev, &reset_data->rcdev);
 }
 
 static struct platform_driver ma35d1_reset_driver = {
-	.probe = ma35d1_reset_probe,
+	.probe	= ma35d1_reset_probe,
 	.driver = {
-		.name = "ma35d1-reset",
+		.name		= "ma35d1-reset",
 		.of_match_table	= ma35d1_reset_dt_ids,
 	},
 };
