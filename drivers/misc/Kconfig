@@ -561,7 +561,41 @@ config TPS6594_PFSM
 
 	  This driver can also be built as a module.  If so, the module
 	  will be called tps6594-pfsm.
+config MA35D1_EBI
+	tristate "Nuvoton MA35D1 EBI support"
+	depends on ARCH_MA35D1
+	help
+	  This driver provides support for Nuvoton MA35D1 EBI.
 
+config MA35D0_EBI
+	tristate "Nuvoton MA35D0 EBI support"
+	depends on ARCH_MA35D0
+	help
+	  This driver provides support for Nuvoton MA35D0 EBI.
+
+config MA35H0_EBI
+	tristate "Nuvoton MA35H0 EBI support"
+	depends on ARCH_MA35H0
+	help
+	  This driver provides support for Nuvoton MA35H0 EBI.
+
+config MA35D1_TIMER
+	tristate "Nuvoton MA35D1 TIMER support"
+	depends on ARCH_MA35D1
+	help
+	  This driver provides support for Nuvoton MA35D1 TIMER.
+
+config MA35D0_TIMER
+	tristate "Nuvoton MA35D0 TIMER support"
+	depends on ARCH_MA35D0
+	help
+	  This driver provides support for Nuvoton MA35D0 TIMER.
+
+config MA35H0_TIMER
+	tristate "Nuvoton MA35H0 TIMER support"
+	depends on ARCH_MA35H0
+	help
+	  This driver provides support for Nuvoton MA35H0 TIMER.
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"
 source "drivers/misc/cb710/Kconfig"
