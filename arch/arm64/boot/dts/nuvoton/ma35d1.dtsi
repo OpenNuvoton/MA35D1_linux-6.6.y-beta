@@ -1282,9 +1282,11 @@
 			thermal-sensors = <&tsen>;
 
 			trips {
-			};
-
-			cooling-maps {
+				cpu-ctrler-alert {
+					temperature = <105000>;
+					hysteresis = <2000>;
+					type = "passive";
+				};
 			};
 		};
 	};
