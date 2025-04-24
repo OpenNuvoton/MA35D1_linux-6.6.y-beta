@@ -43,7 +43,6 @@
 			reg = <0x0 0x0>;
 			clocks = <&clk APLL>;
 			enable-method = "psci";
-			operating-points-v2 = <&a35_opp_table>;
 			next-level-cache = <&L2_0>;
 		};
 		cpu1: cpu@1 {
@@ -51,7 +50,6 @@
 			compatible = "arm,cortex-a35";
 			reg = <0x0 0x1>;
 			enable-method = "psci";
-			operating-points-v2 = <&a35_opp_table>;
 			next-level-cache = <&L2_0>;
 		};
 		L2_0: l2-cache0 {
@@ -60,14 +58,6 @@
 		};
 	};
 
-	a35_opp_table: opp-table {
-		compatible = "operating-points-v2";
-		opp-shared;
-		opp-800000000 {
-			opp-hz = /bits/ 64 <800000000>;
-			opp-microvolt = <1250000>;
-		};
-	};
 #if 0
 	pmu {
 		interrupt-affinity = <&cpu0>, <&cpu1>;
@@ -85,6 +75,10 @@
 		interrupt-affinity = <&A35_0>, <&A35_1>;
 	};
 #endif
+
+	cpufreq@0 {
+		compatible = "nuvoton,ma35d1-cpufreq";
+	};
 
 	clk: clock-controller@40460200 {
 		compatible = "nuvoton,ma35d1-clk", "syscon", "simple-mfd";

@@ -106,9 +106,16 @@ static void ma35d0_cpufreq_remove(struct platform_device *pdev)
 	cpufreq_unregister_driver(&ma35d0_driver);
 }
 
+static const struct of_device_id ma35d0_cpufreq_of_match[] = {
+	{ .compatible = "nuvoton,ma35d0-cpufreq" },
+	{ /* sentinel */ }
+};
+MODULE_DEVICE_TABLE(of, ma35d0_cpufreq_of_match);
+
 static struct platform_driver ma35d0_cpufreq_platdrv = {
 	.driver = {
 		.name	= "ma35d0-cpufreq",
+		.of_match_table = ma35d0_cpufreq_of_match,
 	},
 	.probe		= ma35d0_cpufreq_probe,
 	.remove_new	= ma35d0_cpufreq_remove,
