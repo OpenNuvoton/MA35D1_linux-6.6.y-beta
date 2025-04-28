@@ -8,6 +8,16 @@ menuconfig HWSPINLOCK
 
 if HWSPINLOCK
 
+config HWSEM_MA35
+	tristate "MA35 series Hardware Spinlock device"
+	depends on ARCH_MA35D1 || ARCH_MA35D0 || ARCH_MA35H0 || COMPILE_TEST
+	help
+	  Say y here to support the MA35 series Hardware Semaphore, which
+	  provides a synchronisation mechanism for dual-core CA35 on this
+	  MPU.
+
+	  If unsure, say N.
+
 config HWSPINLOCK_OMAP
 	tristate "OMAP Hardware Spinlock device"
 	depends on ARCH_OMAP4 || SOC_OMAP5 || SOC_DRA7XX || SOC_AM33XX || SOC_AM43XX || ARCH_K3 || COMPILE_TEST

@@ -127,7 +127,7 @@ config DWMAC_NUVOTON
 	depends on OF && (ARCH_MA35D1 || COMPILE_TEST)
 	select MFD_SYSCON
 	help
-	  Support for Ethernet controller on Nuvoton MA35D1 series SoC.
+	  Support for Ethernet controller on Nuvoton MA35 series SoC.
 
 	  This selects the Nuvoton MA35 series SoC glue layer support
 	  for the stmmac device driver. The nuvoton-dwmac driver is

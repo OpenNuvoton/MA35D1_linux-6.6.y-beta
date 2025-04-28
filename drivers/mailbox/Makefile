@@ -62,3 +62,5 @@ obj-$(CONFIG_SPRD_MBOX)		+= sprd-mailbox.o
 obj-$(CONFIG_QCOM_IPCC)		+= qcom-ipcc.o
 
 obj-$(CONFIG_APPLE_MAILBOX)	+= apple-mailbox.o
+
+obj-$(CONFIG_MA35D1_WORMHOLE)	+= ma35d1-wormhole.o

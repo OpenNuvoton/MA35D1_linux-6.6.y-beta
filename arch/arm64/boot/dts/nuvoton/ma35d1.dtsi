@@ -108,16 +108,12 @@
 		#address-cells = <2>;
 		#size-cells = <2>;
 		ranges;
-		rproc_buf: rproc_buf@0 {
-			reg = <0x0 0x80020000 0x0 0x60000>; /* 384KB */
-			no-map;
-		};
 		rpmsg_buf: rpmsg_buf@0 {
-			reg = <0x0 0x84000000 0x0 0x8000>; /* maximun tx+rx 16+16KB */
+			reg = <0x0 0x84000000 0x0 0x8000>;
 			no-map;
 		};
-		amp_buf: amp_buf@0 {
-			reg = <0x0 0x84008000 0x0 0x20000>; /* 128KB for amp shared memory */
+		sram_buf: sram_buf@0 {
+			reg = <0x0 0x2401ff00 0x0 0x100>;
 			no-map;
 		};
 	};
@@ -666,7 +662,9 @@
 		reg = <0x0 0x40380000 0x0 0x1000>;
 		clocks = <&clk HWS_GATE>;
 		clock-names = "hws_gate";
+		interrupts = <GIC_SPI 2 IRQ_TYPE_LEVEL_HIGH>;
 		nuvoton,sys = <&sys>;
+		#hwsem-cells = <1>;
 		status = "okay";
 	};
 
@@ -689,29 +687,31 @@
 
 	rproc {
 		compatible = "nuvoton,ma35d1-rproc";
-		mboxes = <&wormhole 1>;
 		resets = <&reset MA35D1_RESET_CM4>;
 		memory-region = <&rproc_buf>;
 		status = "okay";
 	};
 
-	rpmsg {
-		compatible = "nuvoton,ma35d1-rpmsg";
-		share-mem-addr = <0x2401ff00>;
-		mboxes = <&wormhole 2>;
-		tx-smem-size = <128>;
-		rx-smem-size = <128>;
-		/* rpmsg-v2-arch; */
-		/* rpmsg-ddr-buf; */
-		/* memory-region = <&rpmsg_buf>; */
-		status = "okay";
+	ampm: ampm {
+		compatible = "nuvoton,ma35d1-ampm";
+		memory-region = <&rpmsg_buf>;
+		rxipi = <&hwsem 6>;
+		txipi = <&hwsem 7>;
+		status = "disabled";
 	};
 
 	amp: amp {
-		compatible = "nuvoton,ma35-amp";
-		memory-region = <&amp_buf>;
+		compatible = "nuvoton,ma35d1-amp";
+		memory-region = <&rpmsg_buf>;
 		rxipi = <&timer8>;
 		txipi = <&timer9>;
+		status = "disabled";
+	};
+
+	rpmsg {
+		compatible = "nuvoton,ma35d1-rpmsg";
+		mboxes = <&wormhole 2>;
+		memory-region = <&rpmsg_buf>; /* SRAM: sram_buf, DRAM: rpmsg_buf */
 		status = "disabled";
 	};
 
@@ -737,7 +737,7 @@
 			#size-cells = <0>;
 
 			eth_phy0: ethernet-phy@0 {
-				reg = <1>;
+				reg = <0>;
 			};
 		};
 	};
@@ -1703,10 +1703,12 @@
 	};
 
 	adc0: adc@40420000 {
-		// To use hybrid ADC driver (IIO+TS) for touch screen, change
-		// the compatible string to "nuvoton,ma35d1-adc",
-		// For IIO-only ADC driver, use "nuvoton,ma35-adc" instead.
-		compatible = "nuvoton,ma35d1-adc";
+		/*
+		 * To use hybrid ADC driver (IIO+TS) for touch screen, change
+		 * the compatible string to "nuvoton,ma35d1-ts",
+		 * For IIO-only ADC driver, use "nuvoton,ma35d1-adc" instead.
+		 */
+		compatible = "nuvoton,ma35d1-ts";
 
 		reg = <0x0 0x40420000 0x0 0x500>;
 		interrupts = <GIC_SPI 80 IRQ_TYPE_LEVEL_HIGH>;
@@ -1714,13 +1716,13 @@
 		clock-names = "adc_gate";
 		clock-rate = <200000>;
 
-		// Properties for IIO-only ADC driver
+		/* Properties for IIO-only ADC driver */
 		nuvoton,adc-vref = <3300>;
 		nuvoton,min-clock-frequency = <3200000>;
 		nuvoton,max-clock-frequency = <16000000>;
 		#io-channel-cells = <1>;
 
-		//Properties for hybrid ADC driver (IIO+TS)
+		/* Properties for hybrid ADC driver (IIO+TS) */
 		enable-iio;
 		enable-ts;
 		ts-type = <4>;

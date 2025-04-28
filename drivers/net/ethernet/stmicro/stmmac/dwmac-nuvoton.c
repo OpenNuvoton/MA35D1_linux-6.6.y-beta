@@ -22,10 +22,21 @@
 
 #define NVT_MISCR_RMII          BIT(0)
 
-/* 2000ps is mapped to 0x0 ~ 0xF */
+/* 2000 picoseconds are mapped to 0x0 ~ 0xF */
 #define NVT_PATH_DELAY_DEC      134
 #define NVT_TX_DELAY_MASK       GENMASK(19, 16)
 #define NVT_RX_DELAY_MASK       GENMASK(23, 20)
+
+struct nvt_dev_info {
+	const char *name;
+	u32 features;
+};
+
+static const struct nvt_dev_info nvt_dev_info_list[] = {
+	{ "ma35d1-gmac", 0x1 },
+	{ "ma35d0-emac", 0xC001 },
+	{ "ma35h0-emac", 0xC001 },
+};
 
 struct nvt_priv_data {
 	struct platform_device *pdev;
@@ -116,12 +127,27 @@ nvt_gmac_setup(struct platform_device *pdev, struct plat_stmmacenet_data *plat)
 	return bsp_priv;
 }
 
+static const struct of_device_id nvt_dwmac_match[] = {
+	{ .compatible = "nuvoton,ma35d1-dwmac", .data = &nvt_dev_info_list[0]},
+	{ .compatible = "nuvoton,ma35d0-dwmac", .data = &nvt_dev_info_list[1]},
+	{ .compatible = "nuvoton,ma35h0-dwmac", .data = &nvt_dev_info_list[2]},
+	{ }
+};
+MODULE_DEVICE_TABLE(of, nvt_dwmac_match);
+
 static int nvt_gmac_probe(struct platform_device *pdev)
 {
 	struct plat_stmmacenet_data *plat_dat;
 	struct stmmac_resources stmmac_res;
 	struct nvt_priv_data *priv_data;
+	const struct nvt_dev_info *data;
 	int ret;
+
+	const struct of_device_id *match;
+	match = of_match_device(nvt_dwmac_match, &pdev->dev);
+	if (!match)
+		return -EINVAL;
+	data = match->data;
 
 	ret = stmmac_get_platform_resources(pdev, &stmmac_res);
 	if (ret)
@@ -132,7 +158,7 @@ static int nvt_gmac_probe(struct platform_device *pdev)
 		return PTR_ERR(plat_dat);
 
 	/* Nuvoton DWMAC configs */
-	plat_dat->has_gmac = 1;
+	plat_dat->has_gmac = data->features;
 	plat_dat->tx_fifo_size = 2048;
 	plat_dat->rx_fifo_size = 4096;
 	plat_dat->multicast_filter_bins = 0;
@@ -156,12 +182,6 @@ static int nvt_gmac_probe(struct platform_device *pdev)
 
 	return 0;
 }
-
-static const struct of_device_id nvt_dwmac_match[] = {
-	{ .compatible = "nuvoton,ma35d1-dwmac"},
-	{ }
-};
-MODULE_DEVICE_TABLE(of, nvt_dwmac_match);
 
 static struct platform_driver nvt_dwmac_driver = {
 	.probe  = nvt_gmac_probe,
