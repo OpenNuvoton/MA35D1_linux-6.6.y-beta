@@ -471,9 +471,8 @@
 		compatible = "nuvoton,ma35d1-crypto";
 		reg = <0x0 0x40300000 0x0 0x1000>;
 		interrupts = <GIC_SPI 39 IRQ_TYPE_LEVEL_HIGH>;
-		optee_nuvoton = "yes";
-		rsa_ioctl = "yes";           /* yes: RSA via ioctl, no: RSA via akcipher   */
-		ecc_ioctl = "yes";           /* yes: ECC via ioctl, no: ECDH via akcipher */
+		rsa_ioctl = "yes";   /* yes: ma35 ioctl mode; no: linux akcipher mode */
+		ecc_ioctl = "yes";   /* yes: ma35 ioctl mode; no: linux akcipher mode */
 		status = "okay";
 	};
 
