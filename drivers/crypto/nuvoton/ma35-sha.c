@@ -196,7 +196,6 @@ static void ma35_sha_finish_req(struct nu_sha_reqctx *ctx, int err)
 
 	dd->flags &= ~DD_FLAGS_BUSY;
 
-//printk("%s, %d - dd->queue_task = 0x%x\n", __func__, __LINE__, (int)&dd->queue_task);
 	/* Handle new request */
 	tasklet_schedule(&dd->queue_task);
 }
@@ -342,7 +341,7 @@ static int ma35_sha_update_start(struct nu_sha_dev *dd)
 	if (ctx->flags & SHA_FLAGS_KEY_BLK) {
 		if ((ctx->flags & (SHA_FLAGS_FINUP | SHA_FLAGS_FINAL)) &&
 		    (tctx->bufcnt == 0) && (dd->req->nbytes == 0)) {
-			pr_err("MA35D1 HMAC does not support 0 data length!\n");
+			pr_err("ma35 hmac does not support 0 data length!\n");
 			ma35_sha_finish_req(ctx, -EINVAL);
 			return -EINVAL;
 		}
@@ -484,7 +483,7 @@ static int ma35_sha_finup(struct ahash_request *req)
 
 	err1 = ma35_sha_update(req);
 	if (err1 == -EINPROGRESS || (err1 == -EBUSY &&
-	    (ahash_request_flags(req) &	CRYPTO_TFM_REQ_MAY_BACKLOG)))
+	    (ahash_request_flags(req) & CRYPTO_TFM_REQ_MAY_BACKLOG)))
 		return err1;
 
 	/*
@@ -566,7 +565,7 @@ static struct ahash_alg ma35_sha_algs[] = {
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base = {
 		.cra_name        = "sha1",
-		.cra_driver_name = "nuvoton-sha1",
+		.cra_driver_name = "ma35-sha1",
 		.cra_priority    = 400,
 		.cra_flags       = CRYPTO_ALG_ASYNC,
 		.cra_blocksize   = SHA1_BLOCK_SIZE,
@@ -588,7 +587,7 @@ static struct ahash_alg ma35_sha_algs[] = {
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base = {
 		.cra_name        = "sha224",
-		.cra_driver_name = "nuvoton-sha224",
+		.cra_driver_name = "ma35-sha224",
 		.cra_priority    = 400,
 		.cra_flags       = CRYPTO_ALG_ASYNC,
 		.cra_blocksize   = SHA224_BLOCK_SIZE,
@@ -610,7 +609,7 @@ static struct ahash_alg ma35_sha_algs[] = {
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base = {
 		.cra_name        = "sha256",
-		.cra_driver_name = "nuvoton-sha256",
+		.cra_driver_name = "ma35-sha256",
 		.cra_priority    = 400,
 		.cra_flags       = CRYPTO_ALG_ASYNC,
 		.cra_blocksize   = SHA256_BLOCK_SIZE,
@@ -632,7 +631,7 @@ static struct ahash_alg ma35_sha_algs[] = {
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base = {
 		.cra_name        = "sha384",
-		.cra_driver_name = "nuvoton-sha384",
+		.cra_driver_name = "m35-sha384",
 		.cra_priority    = 400,
 		.cra_flags       = CRYPTO_ALG_ASYNC,
 		.cra_blocksize   = SHA384_BLOCK_SIZE,
@@ -654,7 +653,7 @@ static struct ahash_alg ma35_sha_algs[] = {
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base = {
 		.cra_name        = "sha512",
-		.cra_driver_name = "nuvoton-sha512",
+		.cra_driver_name = "ma35-sha512",
 		.cra_priority    = 400,
 		.cra_flags       = CRYPTO_ALG_ASYNC,
 		.cra_blocksize   = SHA512_BLOCK_SIZE,
@@ -677,7 +676,7 @@ static struct ahash_alg ma35_sha_algs[] = {
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base = {
 		.cra_name        = "hmac(sha1)",
-		.cra_driver_name = "nuvoton-hmac-sha1",
+		.cra_driver_name = "ma35-hmac-sha1",
 		.cra_priority    = 400,
 		.cra_flags       = CRYPTO_ALG_ASYNC,
 		.cra_blocksize   = SHA1_BLOCK_SIZE,
@@ -700,7 +699,7 @@ static struct ahash_alg ma35_sha_algs[] = {
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base = {
 		.cra_name        = "hmac(sha224)",
-		.cra_driver_name = "nuvoton-hmac-sha224",
+		.cra_driver_name = "ma35-hmac-sha224",
 		.cra_priority    = 400,
 		.cra_flags       = CRYPTO_ALG_ASYNC,
 		.cra_blocksize   = SHA224_BLOCK_SIZE,
@@ -723,7 +722,7 @@ static struct ahash_alg ma35_sha_algs[] = {
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base = {
 		.cra_name        = "hmac(sha256)",
-		.cra_driver_name = "nuvoton-hmac-sha256",
+		.cra_driver_name = "ma35-hmac-sha256",
 		.cra_priority    = 400,
 		.cra_flags       = CRYPTO_ALG_ASYNC,
 		.cra_blocksize   = SHA256_BLOCK_SIZE,
@@ -746,7 +745,7 @@ static struct ahash_alg ma35_sha_algs[] = {
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base = {
 		.cra_name        = "hmac(sha384)",
-		.cra_driver_name = "nuvoton-hmac-sha384",
+		.cra_driver_name = "ma35-hmac-sha384",
 		.cra_priority    = 400,
 		.cra_flags       = CRYPTO_ALG_ASYNC,
 		.cra_blocksize   = SHA384_BLOCK_SIZE,
@@ -769,7 +768,7 @@ static struct ahash_alg ma35_sha_algs[] = {
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base = {
 		.cra_name        = "hmac(sha512)",
-		.cra_driver_name = "nuvoton-hmac-sha512",
+		.cra_driver_name = "ma35-hmac-sha512",
 		.cra_priority    = 400,
 		.cra_flags       = CRYPTO_ALG_ASYNC,
 		.cra_blocksize   = SHA512_BLOCK_SIZE,
@@ -791,7 +790,7 @@ static struct ahash_alg ma35_sha_algs[] = {
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base = {
 		.cra_name        = "sm3",
-		.cra_driver_name = "nuvoton-sm3",
+		.cra_driver_name = "ma35-sm3",
 		.cra_priority    = 400,
 		.cra_flags       = CRYPTO_ALG_ASYNC,
 		.cra_blocksize   = SM3_BLOCK_SIZE,
@@ -813,7 +812,7 @@ static struct ahash_alg ma35_sha_algs[] = {
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base = {
 		.cra_name        = "md5",
-		.cra_driver_name = "nuvoton-md5",
+		.cra_driver_name = "ma35-md5",
 		.cra_priority    = 400,
 		.cra_flags       = CRYPTO_ALG_ASYNC,
 		.cra_blocksize   = MD5_HMAC_BLOCK_SIZE,
@@ -838,7 +837,7 @@ static struct ahash_alg  ma35_sha3_algs[] = {
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base = {
 		.cra_name        = "sha3-224",
-		.cra_driver_name = "nuvoton-sha3-224",
+		.cra_driver_name = "ma35-sha3-224",
 		.cra_priority    = 400,
 		.cra_flags       = CRYPTO_ALG_ASYNC,
 		.cra_blocksize   = SHA3_224_BLOCK_SIZE,
@@ -882,7 +881,7 @@ static struct ahash_alg  ma35_sha3_algs[] = {
 	.halg.statesize = sizeof(struct nu_sha_reqctx),
 	.halg.base = {
 		.cra_name        = "sha3-384",
-		.cra_driver_name = "nuvoton-sha3-384",
+		.cra_driver_name = "ma35-sha3-384",
 		.cra_priority    = 400,
 		.cra_flags       = CRYPTO_ALG_ASYNC,
 		.cra_blocksize   = SHA3_384_BLOCK_SIZE,
@@ -980,7 +979,7 @@ int ma35_sha_probe(struct device *dev, struct nu_crypto_dev *crypto_dev)
 			goto err_register;
 	}
 
-	pr_info("ma35 series crypto SHA engine enabled.\n");
+	pr_info("ma35 crypto sha engine enabled.\n");
 	return 0;
 
 err_register:

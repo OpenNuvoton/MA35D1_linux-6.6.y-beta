@@ -467,13 +467,19 @@
 	};
 
 	/* Crypto engine */
-	crypto:crpt@40300000 {
-		compatible = "nuvoton,ma35d1-crypto";
+	crypto_optee {
+		compatible = "nuvoton,ma35d1-crypto-optee";
+		status = "okay";
+	};
+
+	/* Crypto engine */
+	crypto:crypto@40300000 {
+		compatible = "nuvoton,ma35d0-crypto";
 		reg = <0x0 0x40300000 0x0 0x1000>;
 		interrupts = <GIC_SPI 39 IRQ_TYPE_LEVEL_HIGH>;
 		rsa_ioctl = "yes";   /* yes: ma35 ioctl mode; no: linux akcipher mode */
 		ecc_ioctl = "yes";   /* yes: ma35 ioctl mode; no: linux akcipher mode */
-		status = "okay";
+		status = "disabled";
 	};
 
 	/* Key Store */

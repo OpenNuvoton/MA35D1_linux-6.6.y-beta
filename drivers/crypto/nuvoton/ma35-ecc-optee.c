@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * linux/driver/crypto/nuvoton/ma35-ecc.c
+ * linux/driver/crypto/nuvoton/ma35-ecc-optee.c
  *
  * Copyright (c) 2025 Nuvoton technology corporation.
  *
@@ -14,6 +14,7 @@
 #include <linux/interrupt.h>
 #include <linux/kernel.h>
 #include <linux/of.h>
+#include <linux/tee_drv.h>
 #include <linux/crypto.h>
 #include <linux/spinlock.h>
 #include <linux/scatterlist.h>
@@ -686,6 +687,8 @@ static struct nu_ecc_curve _Curve[] = {
 },
 };
 
+static int  optee_ecc_open(struct nu_ecc_dev *dd);
+
 static struct nu_ecc_curve *get_curve(int ecc_curve)
 {
 	int   i;
@@ -696,7 +699,6 @@ static struct nu_ecc_curve *get_curve(int ecc_curve)
 	}
 	return NULL;
 }
-
 
 struct nu_ecc_drv {
 	struct list_head dev_list;
@@ -733,12 +735,12 @@ static struct nu_ecc_dev *ma35_ecc_find_dev(struct nu_ecc_ctx *tctx)
 
 static inline void ma35_write_reg(struct nu_ecc_dev *ecc_dd, u32 val, u32 reg)
 {
-	writel_relaxed(val, ecc_dd->reg_base + reg);
+	ecc_dd->va_shm[reg / 4] = val;
 }
 
 static inline u32 ma35_read_reg(struct nu_ecc_dev *ecc_dd, u32 reg)
 {
-	return readl_relaxed(ecc_dd->reg_base + reg);
+	return ecc_dd->va_shm[reg / 4];
 }
 
 static inline void ma35_write_ecc_key(struct nu_ecc_ctx *ctx, u8 *key, u32 reg)
@@ -797,6 +799,21 @@ static inline void ma35_read_ecc_key(struct nu_ecc_ctx *ctx, u32 reg, u8 *key)
 	}
 }
 
+static const char hex_char_tbl[] = "0123456789abcdef";
+
+static void ecc_key_to_str(u8 *key, char *kstr, int keylen)
+{
+	int   i;
+
+	for (i = 0; i < keylen; i++) {
+		*kstr++ = hex_char_tbl[(*key >> 4) & 0xf];
+		*kstr++ = hex_char_tbl[*key & 0xf];
+		key++;
+	}
+	*kstr++ = 0;
+	*kstr = 0;
+}
+
 static inline int get_nibble_value(char c)
 {
 	if ((c >= '0') && (c <= '9'))
@@ -809,27 +826,6 @@ static inline int get_nibble_value(char c)
 		c = c - 'A' + (char)10;
 
 	return (int)c;
-}
-
-static inline int ma35_wait_ecc_complete(struct nu_ecc_dev *dd, int timeout)
-{
-	unsigned long t_out;
-
-	t_out = jiffies + timeout;
-	while (ma35_read_reg(dd, ECC_STS) & (ECC_STS_BUSY | ECC_STS_DMABUSY)) {
-		if (!time_before(jiffies, t_out)) {
-			ma35_write_reg(dd, ECC_CTL_STOP, ECC_CTL);
-			pr_err("ECC hardware timeout! 0x%x\n", ma35_read_reg(dd, ECC_STS));
-			return -EBUSY;
-		}
-
-		if (ma35_read_reg(dd, ECC_STS) &
-			(ECC_STS_BUSERR | ECC_STS_KSERR)) {
-			pr_err("ECC hardware error! 0x%x\n", ma35_read_reg(dd, ECC_STS));
-			return -EIO;
-		}
-	}
-	return 0;
 }
 
 static int ma35_ecc_init_curve(int curve_id, struct nu_ecc_ctx *ctx)
@@ -872,15 +868,15 @@ static int ma35_ecc_init_curve(int curve_id, struct nu_ecc_ctx *ctx)
 
 		reg = ECC_N + (curve->irreducible_k1 / 32) * 4;
 		ma35_write_reg(dd, ma35_read_reg(dd, reg) |
-			       (0x1 << (curve->irreducible_k1 % 32)), reg);
+				(0x1 << (curve->irreducible_k1 % 32)), reg);
 
 		reg = ECC_N + (curve->irreducible_k2 / 32) * 4;
 		ma35_write_reg(dd, ma35_read_reg(dd, reg) |
-			       (0x1 << (curve->irreducible_k2 % 32)), reg);
+				(0x1 << (curve->irreducible_k2 % 32)), reg);
 
 		reg = ECC_N + (curve->irreducible_k3 / 32) * 4;
 		ma35_write_reg(dd, ma35_read_reg(dd, reg) |
-			       (0x1 << (curve->irreducible_k3 % 32)), reg);
+				(0x1 << (curve->irreducible_k3 % 32)), reg);
 	} else {
 		ma35_write_ecc_key(ctx, curve->Pp, ECC_N);
 	}
@@ -891,6 +887,8 @@ static int ma35_ecc_point_mult(struct nu_ecc_ctx *ctx, u8 *private_key,
 			       u8 *public_key, u8 *result)
 {
 	struct nu_ecc_dev *dd = ctx->dd;
+	struct tee_ioctl_invoke_arg inv_arg;
+	struct tee_param param[4];
 	int err;
 
 	if (public_key != NULL) {
@@ -907,11 +905,48 @@ static int ma35_ecc_point_mult(struct nu_ecc_ctx *ctx, u8 *private_key,
 	ma35_write_ecc_key(ctx, private_key, ECC_K);
 
 	ma35_write_reg(dd, ((ctx->keylen * 8) << ECC_CTL_CURVEM_OFFSET) |
-		       ECC_CTL_FSEL | ECCOP_POINT_MUL | ECC_CTL_START, ECC_CTL);
+		ECC_CTL_FSEL | ECCOP_POINT_MUL | ECC_CTL_START, ECC_CTL);
 
-	err = ma35_wait_ecc_complete(dd, 2000);
-	if (err)
-		return err;
+	/*
+	 *  Invoke OP-TEE Crypto PTA to run ECC
+	 */
+	memset(&inv_arg, 0, sizeof(inv_arg));
+	memset(&param, 0, sizeof(param));
+
+	/* Invoke PTA_CMD_CRYPTO_ECC_PMUL function of PTA */
+	inv_arg.func = PTA_CMD_CRYPTO_ECC_PMUL;
+	inv_arg.session = dd->session_id;
+	inv_arg.num_params = 4;
+
+	/* Fill invoke cmd params */
+	param[0].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
+	param[1].attr = TEE_IOCTL_PARAM_ATTR_TYPE_MEMREF_INOUT;
+	param[2].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
+
+	param[0].u.value.a = ctx->curve->curve_id;
+	param[1].u.memref.shm = dd->shm_pool;
+	param[1].u.memref.size = CRYPTO_SHM_SIZE;
+	param[1].u.memref.shm_offs = 0;
+	param[2].u.value.a = 0x1000;
+	param[2].u.value.b = 0x2000;
+
+	if (public_key != NULL) {
+		ecc_key_to_str(public_key, (char *)&dd->va_shm[0x1000 / 4], ctx->keylen);
+		ecc_key_to_str(public_key + ctx->keylen, (char *)&dd->va_shm[0x1240 / 4],
+			       ctx->keylen);
+	} else {
+		ecc_key_to_str((u8 *)ctx->curve->Px, (char *)&dd->va_shm[0x1000 / 4],
+			       ctx->keylen);
+		ecc_key_to_str((u8 *)ctx->curve->Py, (char *)&dd->va_shm[0x1240 / 4],
+			       ctx->keylen);
+	}
+	ecc_key_to_str(private_key, (char *)&dd->va_shm[0x1480 / 4], ctx->keylen);
+
+	err = tee_client_invoke_func(dd->octx, &inv_arg, param);
+	if ((err < 0) || (inv_arg.ret != 0)) {
+		pr_err("PTA_CMD_CRYPTO_ECC_PMUL err: %x\n", inv_arg.ret);
+		return -EINVAL;
+	}
 
 	ma35_read_ecc_key(ctx, ECC_X1, result);
 	ma35_read_ecc_key(ctx, ECC_Y1, result + ctx->keylen);
@@ -926,6 +961,11 @@ static int ma35_ecdh_set_secret(struct crypto_kpp *tfm, const void *buf, unsigne
 	int err;
 
 	ctx->dd = dd;
+
+	if (dd->octx == NULL) {
+		if (optee_ecc_open(dd) != 0)
+			return -ENODEV;
+	}
 
 	if ((crypto_ecdh_decode_key(buf, len, &params) < 0) ||
 	    params.key_size > sizeof(u64) * ctx->ndigits) {
@@ -962,8 +1002,12 @@ static int ma35_ecdh_compute_value(struct kpp_request *req)
 	void *buf;
 	int ret;
 
-	ctx->dd = dd;
+	if (dd->octx == NULL) {
+		if (optee_ecc_open(dd) != 0)
+			return -ENODEV;
+	}
 
+	ctx->dd = dd;
 	ret = ma35_ecc_init_curve(ctx->curve_id, ctx);
 	if (ret)
 		return ret;
@@ -1088,22 +1132,77 @@ static struct kpp_alg ma35_ecdh_p384 = {
 	},
 };
 
-void cstr_to_hex(u8 *cstr, u8 *hex_buff, int klen)
+static int optee_ctx_match(struct tee_ioctl_version_data *ver, const void *data)
 {
-	int i, kidx, bytes;
+	if (ver->impl_id == TEE_IMPL_ID_OPTEE)
+		return 1;
+	else
+		return 0;
+}
 
-	bytes = (klen + 7) / 8;
-	hex_buff[bytes] = 0;
-	hex_buff[bytes + 1] = 0;
+static int optee_ecc_open(struct nu_ecc_dev *dd)
+{
+	struct tee_ioctl_open_session_arg sess_arg;
+	int err;
 
-	i = strlen(cstr) - 1;
-	for (kidx = bytes - 1; kidx >= 0; kidx--) {
-		hex_buff[kidx] = 0;
-		if (i >= 0)
-			hex_buff[kidx] = get_nibble_value(cstr[i--]);
-		if (i >= 0)
-			hex_buff[kidx] |= (get_nibble_value(cstr[i--]) << 4);
+	err = ma35_crypto_optee_init(dd->nu_cdev);
+	if (err)
+		return err;
+	/*
+	 * Open ECC context with TEE driver
+	 */
+	dd->octx = tee_client_open_context(NULL, optee_ctx_match, NULL, NULL);
+	if (IS_ERR(dd->octx)) {
+		pr_err("%s open context failed, err: %x\n", __func__, sess_arg.ret);
+		return err;
 	}
+
+	/*
+	 * Open ECC session with Crypto Trusted App
+	 */
+	memset(&sess_arg, 0, sizeof(sess_arg));
+	memcpy(sess_arg.uuid, dd->nu_cdev->tee_cdev->id.uuid.b, TEE_IOCTL_UUID_LEN);
+	sess_arg.clnt_login = TEE_IOCTL_LOGIN_PUBLIC;
+	sess_arg.num_params = 0;
+
+	err = tee_client_open_session(dd->octx, &sess_arg, NULL);
+	if ((err < 0) || (sess_arg.ret != 0)) {
+		pr_err("%s open session failed, err: %x\n", __func__, sess_arg.ret);
+		err = -EINVAL;
+		goto out_ctx;
+	}
+	dd->session_id = sess_arg.session;
+
+	/*
+	 * Allocate handshake buffer from OP-TEE share memory
+	 */
+	dd->shm_pool = tee_shm_alloc_kernel_buf(dd->octx, CRYPTO_SHM_SIZE);
+	if (IS_ERR(dd->shm_pool)) {
+		pr_err("%s tee_shm_alloc failed\n", __func__);
+		goto out_sess;
+	}
+
+	dd->va_shm = tee_shm_get_va(dd->shm_pool, 0);
+	if (IS_ERR(dd->va_shm)) {
+		tee_shm_free(dd->shm_pool);
+		pr_err("%s tee_shm_get_va failed\n", __func__);
+		goto out_sess;
+	}
+	return 0;
+
+out_sess:
+	tee_client_close_session(dd->octx, dd->session_id);
+out_ctx:
+	tee_client_close_context(dd->octx);
+	return err;
+}
+
+static void optee_ecc_close(struct nu_ecc_dev *dd)
+{
+	tee_shm_free(dd->shm_pool);
+	tee_client_close_session(dd->octx, dd->session_id);
+	tee_client_close_context(dd->octx);
+	dd->octx = NULL;
 }
 
 static long ma35_ecc_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
@@ -1111,6 +1210,8 @@ static long ma35_ecc_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
 	struct nu_ecc_dev *dd;
 	struct nu_ecc_ctx *ecc_ctx = filp->private_data;
 	struct ecc_args_t args;
+	struct tee_ioctl_invoke_arg inv_arg;
+	struct tee_param param[4];
 	u8 kbuf[160];
 	u32 ecc_ctl;
 	int ret;
@@ -1125,13 +1226,16 @@ static long ma35_ecc_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
 		if (copy_from_user(&args, (u8 *)arg, sizeof(args)))
 			return -EFAULT;
 
+		memset(dd->va_shm, 0, CRYPTO_SHM_SIZE);
+
 		ma35_ecc_init_curve(args.curve, ecc_ctx);
 
 		if (args.knum_d != -1) {
 			ma35_write_reg(dd, ECC_KSCTL_RSRCK | (args.knum_d & 0x9F), ECC_KSCTL);
 		} else {
 			ma35_write_reg(dd, 0, ECC_KSCTL);
-			ma35_write_ecc_key(ecc_ctx, args.d, ECC_K);
+			ecc_key_to_str(args.d, (char *)&dd->va_shm[0x1000 / 4],
+				       ecc_ctx->keylen);
 		}
 
 		if (ecc_ctx->curve->GF == (int)CURVE_GF_2M) {
@@ -1144,9 +1248,34 @@ static long ma35_ecc_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
 		ma35_write_reg(dd, (ecc_ctx->curve->key_len << ECC_CTL_CURVEM_OFFSET) |
 			       ECCOP_POINT_MUL | ECC_CTL_START | ecc_ctl, ECC_CTL);
 
-		ret = ma35_wait_ecc_complete(dd, 2000);
-		if (ret)
-			return ret;
+		/*
+		 *  Invoke OP-TEE Crypto PTA to run ECC
+		 */
+		memset(&inv_arg, 0, sizeof(inv_arg));
+		memset(&param, 0, sizeof(param));
+
+		/* Invoke PTA_CMD_CRYPTO_ECC_PMUL function of PTA */
+		inv_arg.func = PTA_CMD_CRYPTO_ECC_KEY_GEN;
+		inv_arg.session = dd->session_id;
+		inv_arg.num_params = 4;
+
+		/* Fill invoke cmd params */
+		param[0].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
+		param[1].attr = TEE_IOCTL_PARAM_ATTR_TYPE_MEMREF_INOUT;
+		param[2].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
+
+		param[0].u.value.a = ecc_ctx->curve->curve_id;
+		param[1].u.memref.shm = dd->shm_pool;
+		param[1].u.memref.size = CRYPTO_SHM_SIZE;
+		param[1].u.memref.shm_offs = 0;
+		param[2].u.value.a = 0x1000;
+		param[2].u.value.b = 0x2000;
+
+		ret = tee_client_invoke_func(dd->octx, &inv_arg, param);
+		if ((ret < 0) || (inv_arg.ret != 0)) {
+			pr_err("PTA_CMD_CRYPTO_ECC_KEY_GEN err: %x\n", inv_arg.ret);
+			return -EINVAL;
+		}
 
 		ma35_read_ecc_key(ecc_ctx, ECC_X1, kbuf);
 		if (copy_to_user(((struct ecc_args_t *)arg)->out_x, kbuf, ecc_ctx->keylen))
@@ -1161,18 +1290,21 @@ static long ma35_ecc_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
 		if (copy_from_user(&args, (u8 *)arg, sizeof(args)))
 			return -EFAULT;
 
+		memset(dd->va_shm, 0, CRYPTO_SHM_SIZE);
+
 		ma35_ecc_init_curve(args.curve, ecc_ctx);
 
 		if (args.knum_d != -1) {
 			ma35_write_reg(dd, ECC_KSCTL_RSRCK | (args.knum_d & 0x9F), ECC_KSCTL);
 		} else {
 			ma35_write_reg(dd, 0, ECC_KSCTL);
-			ma35_write_ecc_key(ecc_ctx, args.d, ECC_K);
+			ecc_key_to_str(args.d, (char *)&dd->va_shm[0x1480 / 4],
+				       ecc_ctx->keylen);
 		}
 
 		ma35_write_reg(dd, 0, ECC_KSXY);
-		ma35_write_ecc_key(ecc_ctx, args.Qx, ECC_X1);
-		ma35_write_ecc_key(ecc_ctx, args.Qy, ECC_Y1);
+		ecc_key_to_str(args.Qx, (char *)&dd->va_shm[0x1000 / 4], ecc_ctx->keylen);
+		ecc_key_to_str(args.Qy, (char *)&dd->va_shm[0x1240 / 4], ecc_ctx->keylen);
 
 		if (ecc_ctx->curve->GF == (int)CURVE_GF_2M) {
 			ecc_ctl = 0x0;
@@ -1184,9 +1316,34 @@ static long ma35_ecc_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
 		ma35_write_reg(dd, (ecc_ctx->curve->key_len << ECC_CTL_CURVEM_OFFSET) |
 			       ECCOP_POINT_MUL | ECC_CTL_START | ecc_ctl, ECC_CTL);
 
-		ret = ma35_wait_ecc_complete(dd, 2000);
-		if (ret)
-			return ret;
+		/*
+		 *  Invoke OP-TEE Crypto PTA to run ECC
+		 */
+		memset(&inv_arg, 0, sizeof(inv_arg));
+		memset(&param, 0, sizeof(param));
+
+		/* Invoke PTA_CMD_CRYPTO_ECC_PMUL function of PTA */
+		inv_arg.func = PTA_CMD_CRYPTO_ECC_PMUL;
+		inv_arg.session = dd->session_id;
+		inv_arg.num_params = 4;
+
+		/* Fill invoke cmd params */
+		param[0].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
+		param[1].attr = TEE_IOCTL_PARAM_ATTR_TYPE_MEMREF_INOUT;
+		param[2].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
+
+		param[0].u.value.a = ecc_ctx->curve->curve_id;
+		param[1].u.memref.shm = dd->shm_pool;
+		param[1].u.memref.size = CRYPTO_SHM_SIZE;
+		param[1].u.memref.shm_offs = 0;
+		param[2].u.value.a = 0x1000;
+		param[2].u.value.b = 0x2000;
+
+		ret = tee_client_invoke_func(dd->octx, &inv_arg, param);
+		if ((ret < 0) || (inv_arg.ret != 0)) {
+			pr_err("PTA_CMD_CRYPTO_ECC_PMUL err: %x\n", inv_arg.ret);
+			return -EINVAL;
+		}
 
 		ma35_read_ecc_key(ecc_ctx, ECC_X1, kbuf);
 		if (copy_to_user(((struct ecc_args_t *)arg)->out_x, kbuf, ecc_ctx->keylen))
@@ -1198,12 +1355,112 @@ static long ma35_ecc_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
 		break;
 
 	case ECC_IOC_SIG_VERIFY:
-		/* only supported by op-tee enabled */
-		return -EINVAL;
+		if (copy_from_user(&args, (u8 *)arg, sizeof(args)))
+			return -EFAULT;
+
+		memset(dd->va_shm, 0, CRYPTO_SHM_SIZE);
+
+		ma35_ecc_init_curve(args.curve, ecc_ctx);
+
+		if (args.knum_x != -1) {
+			ma35_write_reg(dd, ECC_KSXY_RSRCXY | (args.knum_x & 0x9F) |
+				       ((args.knum_y & 0x9F) << 8), ECC_KSXY);
+		} else {
+			ma35_write_reg(dd, 0, ECC_KSXY);
+			strncpy((char *)&dd->va_shm[0x1240 / 4], args.Qx, 0x240);
+			strncpy((char *)&dd->va_shm[0x1480 / 4], args.Qy, 0x240);
+		}
+
+		strncpy((char *)&dd->va_shm[0x1000 / 4], args.sha_dgst, 0x240);
+		strncpy((char *)&dd->va_shm[0x16C0 / 4], args.R, 0x240);
+		strncpy((char *)&dd->va_shm[0x1900 / 4], args.S, 0x240);
+
+		/*
+		 *  Invoke OP-TEE Crypto PTA to run ECC
+		 */
+		memset(&inv_arg, 0, sizeof(inv_arg));
+		memset(&param, 0, sizeof(param));
+
+		/* Invoke PTA_CMD_CRYPTO_ECC_SIG_VERIFY function of PTA */
+		inv_arg.func = PTA_CMD_CRYPTO_ECC_SIG_VERIFY;
+		inv_arg.session = dd->session_id;
+		inv_arg.num_params = 4;
+
+		/* Fill invoke cmd params */
+		param[0].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
+		param[1].attr = TEE_IOCTL_PARAM_ATTR_TYPE_MEMREF_INOUT;
+		param[2].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
+
+		param[0].u.value.a = ecc_ctx->curve->curve_id;
+		param[1].u.memref.shm = dd->shm_pool;
+		param[1].u.memref.size = CRYPTO_SHM_SIZE;
+		param[1].u.memref.shm_offs = 0;
+		param[2].u.value.a = 0x1000;
+		param[2].u.value.b = 0x2000;
+
+		ret = tee_client_invoke_func(dd->octx, &inv_arg, param);
+		if ((ret < 0) || (inv_arg.ret != 0)) {
+			pr_err("ECC_IOC_SIG_VERIFY failed: %x\n", inv_arg.ret);
+			return -EINVAL;
+		}
+		break;
 
 	case ECC_IOC_SIG_GEN:
-		/* only supported by op-tee enabled */
-		return -EINVAL;
+		if (copy_from_user(&args, (u8 *)arg, sizeof(args)))
+			return -EFAULT;
+
+		memset(dd->va_shm, 0, CRYPTO_SHM_SIZE);
+
+		ma35_ecc_init_curve(args.curve, ecc_ctx);
+
+		if (args.knum_d != -1) {
+			ma35_write_reg(dd, ECC_KSCTL_RSRCK | (args.knum_d & 0x9F), ECC_KSCTL);
+		} else {
+			ma35_write_reg(dd, 0, ECC_KSCTL);
+			ecc_key_to_str(args.d, (char *)&dd->va_shm[0x1000 / 4],
+				       ecc_ctx->keylen);
+		}
+
+		strncpy((char *)&dd->va_shm[0x1000 / 4], args.sha_dgst, 0x240);
+		strncpy((char *)&dd->va_shm[0x1240 / 4], args.d, 0x240);
+		strncpy((char *)&dd->va_shm[0x1480 / 4], args.k, 0x240);
+
+		/*
+		 *  Invoke OP-TEE Crypto PTA to run ECC
+		 */
+		memset(&inv_arg, 0, sizeof(inv_arg));
+		memset(&param, 0, sizeof(param));
+
+		/* Invoke PTA_CMD_CRYPTO_ECC_SIG_GEN function of PTA */
+		inv_arg.func = PTA_CMD_CRYPTO_ECC_SIG_GEN;
+		inv_arg.session = dd->session_id;
+		inv_arg.num_params = 4;
+
+		/* Fill invoke cmd params */
+		param[0].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
+		param[1].attr = TEE_IOCTL_PARAM_ATTR_TYPE_MEMREF_INOUT;
+		param[2].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_INPUT;
+
+		param[0].u.value.a = ecc_ctx->curve->curve_id;
+		param[1].u.memref.shm = dd->shm_pool;
+		param[1].u.memref.size = CRYPTO_SHM_SIZE;
+		param[1].u.memref.shm_offs = 0;
+		param[2].u.value.a = 0x1000;
+		param[2].u.value.b = 0x2000;
+
+		ret = tee_client_invoke_func(dd->octx, &inv_arg, param);
+		if ((ret < 0) || (inv_arg.ret != 0)) {
+			pr_err("ECC_IOC_SIG_GEN failed: %x\n", inv_arg.ret);
+			return -EINVAL;
+		}
+
+		if (copy_to_user(((struct ecc_args_t *)arg)->R,
+				 (char *)&dd->va_shm[0x2000 / 4], ECC_KMAXL))
+			return -EFAULT;
+		if (copy_to_user(((struct ecc_args_t *)arg)->S,
+				 (char *)&dd->va_shm[0x2240 / 4], ECC_KMAXL))
+			return -EFAULT;
+		break;
 
 	default:
 		return -ENOTTY;
@@ -1221,6 +1478,10 @@ static int ma35_ecc_open(struct inode *inode, struct file *file)
 	ecc_ctx->dd = __ecc_dd;
 	file->private_data = ecc_ctx;
 
+	if (__ecc_dd->octx == NULL) {
+		if (optee_ecc_open(__ecc_dd) != 0)
+			return -ENODEV;
+	}
 	return 0;
 }
 
@@ -1248,7 +1509,7 @@ static struct miscdevice ma35_ecc_dev = {
 	.fops		= &ma35_ecc_fops,
 };
 
-int ma35_ecc_probe(struct device *dev, struct nu_crypto_dev *crypto_dev)
+int ma35_ecc_optee_probe(struct device *dev, struct nu_crypto_dev *crypto_dev)
 {
 	struct nu_ecc_dev *ecc_dd = &crypto_dev->ecc_dd;
 	int err = 0;
@@ -1267,7 +1528,11 @@ int ma35_ecc_probe(struct device *dev, struct nu_crypto_dev *crypto_dev)
 	spin_unlock(&nu_ecc.lock);
 
 	if (crypto_dev->ecc_ioctl == true) {
-		misc_register(&ma35_ecc_dev);
+		err = misc_register(&ma35_ecc_dev);
+		if (err) {
+			dev_err(dev, "ecc-optee failed on misc_register!\n");
+			goto err_out;
+		}
 	} else {
 		err = crypto_register_kpp(&ma35_ecdh_p192);
 		if (err) {
@@ -1288,7 +1553,7 @@ int ma35_ecc_probe(struct device *dev, struct nu_crypto_dev *crypto_dev)
 		}
 	}
 
-	pr_info("ma35 crypto ecc engine enabled.\n");
+	pr_info("ma35 crypto ecc optee enabled.\n");
 	return 0;
 
 err_out:
@@ -1296,11 +1561,11 @@ err_out:
 	list_del(&ecc_dd->list);
 	spin_unlock(&nu_ecc.lock);
 
-	dev_err(dev, "ma35 ecc initialization failed. %d\n", err);
+	dev_err(dev, "ma35 ecc optee initialization failed. %d\n", err);
 	return err;
 }
 
-int ma35_ecc_remove(struct device *dev, struct nu_crypto_dev *crypto_dev)
+int ma35_ecc_optee_remove(struct device *dev, struct nu_crypto_dev *crypto_dev)
 {
 	struct nu_ecc_dev *ecc_dd = &crypto_dev->ecc_dd;
 
@@ -1318,6 +1583,8 @@ int ma35_ecc_remove(struct device *dev, struct nu_crypto_dev *crypto_dev)
 	spin_lock(&nu_ecc.lock);
 	list_del(&ecc_dd->list);
 	spin_unlock(&nu_ecc.lock);
+
+	optee_ecc_close(ecc_dd);
 
 	return 0;
 }

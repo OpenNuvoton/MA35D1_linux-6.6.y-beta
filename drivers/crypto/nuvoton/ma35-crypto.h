@@ -589,7 +589,6 @@ struct nu_rsa_dev {
 
 struct nu_crypto_dev {
 	struct device           *dev;
-	bool                    use_optee;
 	struct tee_client_device *tee_cdev;
 	void __iomem            *reg_base;
 	unsigned long           prng;
@@ -861,13 +860,14 @@ int ma35_ecc_remove(struct device *dev, struct nu_crypto_dev *crypto_dev);
 int ma35_rsa_probe(struct device *dev, struct nu_crypto_dev *crypto_dev);
 int ma35_rsa_remove(struct device *dev, struct nu_crypto_dev *crypto_dev);
 
-#if 0
-extern int nuvoton_crypto_optee_init(struct nu_crypto_dev *nu_cryp_dev);
+int ma35_crypto_optee_init(struct nu_crypto_dev *crypto_dev);
+int ma35_aes_optee_probe(struct device *dev, struct nu_crypto_dev *crypto_dev);
+int ma35_aes_optee_remove(struct device *dev, struct nu_crypto_dev *crypto_dev);
+int ma35_sha_optee_probe(struct device *dev, struct nu_crypto_dev *crypto_dev);
+int ma35_sha_optee_remove(struct device *dev, struct nu_crypto_dev *crypto_dev);
+int ma35_ecc_optee_probe(struct device *dev, struct nu_crypto_dev *crypto_dev);
+int ma35_ecc_optee_remove(struct device *dev, struct nu_crypto_dev *crypto_dev);
+int ma35_rsa_optee_probe(struct device *dev, struct nu_crypto_dev *crypto_dev);
+int ma35_rsa_optee_remove(struct device *dev, struct nu_crypto_dev *crypto_dev);
 
-/* functions in crypto/ecc.c */
-extern int ecc_gen_privkey(unsigned int curve_id, unsigned int ndigits, u64 *privkey);
-extern int ecc_is_key_valid(unsigned int curve_id, unsigned int ndigits,
-			    const u64 *private_key, unsigned int private_key_len);
 #endif
-
-#endif /* __NUVOTON_CRYPTO_H__ */

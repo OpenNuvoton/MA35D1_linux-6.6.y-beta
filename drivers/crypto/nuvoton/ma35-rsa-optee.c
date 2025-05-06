@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * linux/driver/crypto/nuvoton/ma35-rsa.c
+ * linux/driver/crypto/nuvoton/ma35-rsa-optee.c
  *
  * Copyright (c) 2025 Nuvoton technology corporation.
  *
@@ -11,6 +11,7 @@
  */
 #include <linux/dma-mapping.h>
 #include <linux/kernel.h>
+#include <linux/tee_drv.h>
 #include <linux/crypto.h>
 #include <linux/miscdevice.h>
 #include <crypto/internal/rsa.h>
@@ -18,6 +19,7 @@
 
 #include "ma35-crypto.h"
 
+static int optee_rsa_open(struct nu_rsa_dev *dd);
 static struct nu_rsa_dev  *__rsa_dd;
 
 struct nu_rsa_drv {
@@ -54,12 +56,12 @@ static struct nu_rsa_dev *ma35_rsa_find_dev(struct nu_rsa_ctx *ctx)
 
 static inline void ma35_write_reg(struct nu_rsa_dev *rsa_dd, u32 val, u32 reg)
 {
-	writel_relaxed(val, rsa_dd->reg_base + reg);
+	rsa_dd->va_shm[reg/4] = val;
 }
 
 static inline u32 ma35_read_reg(struct nu_rsa_dev *rsa_dd, u32 reg)
 {
-	return readl_relaxed(rsa_dd->reg_base + reg);
+	return rsa_dd->va_shm[reg/4];
 }
 
 static int check_key_length(u8 *input, int keysz)
@@ -85,7 +87,7 @@ static int check_ras_length(struct rsa_key *raw_key)
 	return rsa_len;
 }
 
-int ma35_rsa_hex_to_reg(u8 *input, int keylen, int rsa_bit_len, u32 *reg)
+static int ma35_rsa_hex_to_reg(u8 *input, int keylen, int rsa_bit_len, u32 *reg)
 {
 	int rsa_byte_len = rsa_bit_len/8;
 	u8 buff[NU_RSA_MAX_BYTE_LEN];
@@ -105,7 +107,7 @@ int ma35_rsa_hex_to_reg(u8 *input, int keylen, int rsa_bit_len, u32 *reg)
 
 	for (idx = rsa_byte_len - 1; idx > 0; idx -= 4) {
 		*reg++ = (buff[idx - 3] << 24) | (buff[idx - 2] << 16) |
-			 (buff[idx - 1] << 8) | buff[idx];
+				(buff[idx - 1] << 8) | buff[idx];
 	}
 	return 0;
 }
@@ -157,11 +159,16 @@ static int ma35_rsa_enc(struct akcipher_request *req)
 	struct crypto_akcipher *tfm = crypto_akcipher_reqtfm(req);
 	struct nu_rsa_ctx *ctx = akcipher_tfm_ctx(tfm);
 	struct nu_rsa_dev *dd = ma35_rsa_find_dev(ctx);
+	struct tee_ioctl_invoke_arg inv_arg;
+	struct tee_param param[4];
 	u8 m[NU_RSA_MAX_BYTE_LEN];
-	unsigned long timeout;
 	u32 keyleng;
 	int len, err;
 
+	if (dd->octx == NULL) {
+		if (optee_rsa_open(dd) != 0)
+			return -ENODEV;
+	}
 	ctx->dd = dd;
 	keyleng = ctx->rsa_bit_len/1024 - 1;
 
@@ -207,13 +214,28 @@ static int ma35_rsa_enc(struct akcipher_request *req)
 
 	ma35_write_reg(dd, (keyleng << RSA_CTL_KEYLENG_OFFSET) | RSA_CTL_START, RSA_CTL);
 
-	timeout = jiffies + msecs_to_jiffies(2000);
-	while (ma35_read_reg(dd, RSA_STS) & RSA_STS_BUSY) {
-		if (time_after(jiffies, timeout)) {
-			pr_err("RSA encrypt time-out!\n");
-			err = -EIO;
-			break;
-		}
+	/*
+	 *  Invoke OP-TEE Crypto PTA to run RSA
+	 */
+	memset(&inv_arg, 0, sizeof(inv_arg));
+	memset(&param, 0, sizeof(param));
+
+	/* Invoke PTA_CMD_CRYPTO_RSA_RUN function of Trusted App */
+	inv_arg.func = PTA_CMD_CRYPTO_RSA_RUN;
+	inv_arg.session = dd->session_id;
+	inv_arg.num_params = 4;
+
+	/* Fill invoke cmd params */
+	param[1].attr = TEE_IOCTL_PARAM_ATTR_TYPE_MEMREF_INOUT;
+
+	param[1].u.memref.shm = dd->shm_pool;
+	param[1].u.memref.size = CRYPTO_SHM_SIZE;
+	param[1].u.memref.shm_offs = 0;
+
+	err = tee_client_invoke_func(dd->octx, &inv_arg, param);
+	if ((err < 0) || (inv_arg.ret != 0)) {
+		pr_err("PTA_CMD_CRYPTO_RSA_RUN enc err: %x\n", inv_arg.ret);
+		return -EINVAL;
 	}
 
 	dma_unmap_single(dd->dev, ctx->dma_buff, RSA_BUFF_SIZE, DMA_FROM_DEVICE);
@@ -231,10 +253,16 @@ static int ma35_rsa_dec(struct akcipher_request *req)
 	struct crypto_akcipher *tfm = crypto_akcipher_reqtfm(req);
 	struct nu_rsa_ctx *ctx = akcipher_tfm_ctx(tfm);
 	struct nu_rsa_dev *dd = ma35_rsa_find_dev(ctx);
+	struct tee_ioctl_invoke_arg inv_arg;
+	struct tee_param param[4];
 	u8 m[NU_RSA_MAX_BYTE_LEN];
-	unsigned long timeout;
 	u32 keyleng;
 	int err, len;
+
+	if (dd->octx == NULL) {
+		if (optee_rsa_open(dd) != 0)
+			return -ENODEV;
+	}
 
 	ctx->dd = dd;
 	keyleng = (ctx->rsa_bit_len - 1024) / 1024;
@@ -242,7 +270,7 @@ static int ma35_rsa_dec(struct akcipher_request *req)
 	memset(&ctx->buffer[D_OFF], 0, NU_RSA_MAX_BYTE_LEN);
 
 	err = ma35_rsa_hex_to_reg((u8 *)ctx->private_key, ctx->private_key_size,
-				ctx->rsa_bit_len, (u32 *)&ctx->buffer[D_OFF]);
+				  ctx->rsa_bit_len, (u32 *)&ctx->buffer[D_OFF]);
 	if (err)
 		return err;
 
@@ -280,13 +308,28 @@ static int ma35_rsa_dec(struct akcipher_request *req)
 
 	ma35_write_reg(dd, (keyleng << RSA_CTL_KEYLENG_OFFSET) | RSA_CTL_START, RSA_CTL);
 
-	timeout = jiffies + msecs_to_jiffies(2000);
-	while (ma35_read_reg(dd, RSA_STS) & RSA_STS_BUSY) {
-		if (time_after(jiffies, timeout)) {
-			pr_err("RSA decrypt time-out!\n");
-			err = -EIO;
-			break;
-		}
+	/*
+	 *  Invoke OP-TEE Crypto PTA to run RSA
+	 */
+	memset(&inv_arg, 0, sizeof(inv_arg));
+	memset(&param, 0, sizeof(param));
+
+	/* Invoke PTA_CMD_CRYPTO_RSA_RUN function of Trusted App */
+	inv_arg.func = PTA_CMD_CRYPTO_RSA_RUN;
+	inv_arg.session = dd->session_id;
+	inv_arg.num_params = 4;
+
+	/* Fill invoke cmd params */
+	param[1].attr = TEE_IOCTL_PARAM_ATTR_TYPE_MEMREF_INOUT;
+
+	param[1].u.memref.shm = dd->shm_pool;
+	param[1].u.memref.size = CRYPTO_SHM_SIZE;
+	param[1].u.memref.shm_offs = 0;
+
+	err = tee_client_invoke_func(dd->octx, &inv_arg, param);
+	if ((err < 0) || (inv_arg.ret != 0)) {
+		pr_err("PTA_CMD_CRYPTO_RSA_RUN dec err: %x\n", inv_arg.ret);
+		return -EINVAL;
 	}
 
 	dma_unmap_single(dd->dev, ctx->dma_buff, RSA_BUFF_SIZE, DMA_BIDIRECTIONAL);
@@ -315,8 +358,8 @@ static int ma35_rsa_set_pub_key(struct crypto_akcipher *tfm, const void *key,
 		return err;
 
 	pr_debug("Key size n,e,d,p,q: %d %d %d %d %d\n", (int)raw_key.n_sz,
-		 (int)raw_key.e_sz, (int)raw_key.d_sz, (int)raw_key.p_sz,
-		 (int)raw_key.q_sz);
+		(int)raw_key.e_sz, (int)raw_key.d_sz, (int)raw_key.p_sz,
+		(int)raw_key.q_sz);
 
 	rsa_bit_len = check_ras_length(&raw_key);
 	if (rsa_bit_len < 0)
@@ -327,7 +370,7 @@ static int ma35_rsa_set_pub_key(struct crypto_akcipher *tfm, const void *key,
 	memset(&ctx->buffer[N_OFF], 0, NU_RSA_MAX_BYTE_LEN);
 
 	err = ma35_rsa_hex_to_reg((u8 *)raw_key.n, raw_key.n_sz, rsa_bit_len,
-				  (u32 *)&ctx->buffer[N_OFF]);
+					(u32 *)&ctx->buffer[N_OFF]);
 	if (err)
 		return err;
 
@@ -352,8 +395,8 @@ static int ma35_rsa_set_priv_key(struct crypto_akcipher *tfm, const void *key,
 		return err;
 
 	pr_debug("Key size n,e,d,p,q: %d %d %d %d %d\n", (int)raw_key.n_sz,
-		 (int)raw_key.e_sz, (int)raw_key.d_sz, (int)raw_key.p_sz,
-		 (int)raw_key.q_sz);
+		(int)raw_key.e_sz, (int)raw_key.d_sz, (int)raw_key.p_sz,
+		(int)raw_key.q_sz);
 
 	rsa_bit_len = check_ras_length(&raw_key);
 	if (rsa_bit_len < 0)
@@ -393,7 +436,7 @@ static int ma35_rsa_init_tfm(struct crypto_akcipher *tfm)
 	return 0;
 }
 
-static struct akcipher_alg ma35_rsa_alg = {
+static struct akcipher_alg ma35_rsa_optee_alg = {
 	.encrypt = ma35_rsa_enc,
 	.decrypt = ma35_rsa_dec,
 	.set_priv_key = ma35_rsa_set_priv_key,
@@ -401,16 +444,89 @@ static struct akcipher_alg ma35_rsa_alg = {
 	.max_size = ma35_rsa_max_size,
 	.init = ma35_rsa_init_tfm,
 	.base = {
-		.cra_name = "rsa(ma35)",
-		.cra_driver_name = "rsa-ma35d1",
+		.cra_name = "rsa(ma35-optee)",
+		.cra_driver_name = "rsa-ma35d1-optee",
 		.cra_priority = 500,
 		.cra_module = THIS_MODULE,
 		.cra_ctxsize = sizeof(struct nu_rsa_ctx),
 	},
 };
 
-static int ma35_rsa_ioctl_set_register(struct nu_rsa_ctx *rsa_ctx, int offs,
-				       unsigned long arg)
+static int optee_ctx_match(struct tee_ioctl_version_data *ver, const void *data)
+{
+	if (ver->impl_id == TEE_IMPL_ID_OPTEE)
+		return 1;
+	else
+		return 0;
+}
+
+static int optee_rsa_open(struct nu_rsa_dev *dd)
+{
+	struct tee_ioctl_open_session_arg sess_arg;
+	int   err;
+
+	err = ma35_crypto_optee_init(dd->nu_cdev);
+	if (err)
+		return err;
+	/*
+	 * Open RSA context with TEE driver
+	 */
+	dd->octx = tee_client_open_context(NULL, optee_ctx_match, NULL, NULL);
+	if (IS_ERR(dd->octx)) {
+		pr_err("%s open context failed, err: %x\n", __func__, sess_arg.ret);
+		return err;
+	}
+
+	/*
+	 * Open RSA session with Crypto Trusted App
+	 */
+	memset(&sess_arg, 0, sizeof(sess_arg));
+	memcpy(sess_arg.uuid, dd->nu_cdev->tee_cdev->id.uuid.b, TEE_IOCTL_UUID_LEN);
+	sess_arg.clnt_login = TEE_IOCTL_LOGIN_PUBLIC;
+	sess_arg.num_params = 0;
+
+	err = tee_client_open_session(dd->octx, &sess_arg, NULL);
+	if ((err < 0) || (sess_arg.ret != 0)) {
+		pr_err("%s open session failed, err: %x\n", __func__, sess_arg.ret);
+		err = -EINVAL;
+		goto out_ctx;
+	}
+	dd->session_id = sess_arg.session;
+
+	/*
+	 * Allocate handshake buffer from OP-TEE share memory
+	 */
+	dd->shm_pool = tee_shm_alloc_kernel_buf(dd->octx, CRYPTO_SHM_SIZE);
+	if (IS_ERR(dd->shm_pool)) {
+		pr_err("%s tee_shm_alloc failed\n", __func__);
+		goto out_sess;
+	}
+
+	dd->va_shm = tee_shm_get_va(dd->shm_pool, 0);
+	if (IS_ERR(dd->va_shm)) {
+		tee_shm_free(dd->shm_pool);
+		pr_err("%s tee_shm_get_va failed\n", __func__);
+		goto out_sess;
+	}
+
+	return 0;
+
+out_sess:
+	tee_client_close_session(dd->octx, dd->session_id);
+out_ctx:
+	tee_client_close_context(dd->octx);
+	return err;
+}
+
+static void optee_rsa_close(struct nu_rsa_dev *dd)
+{
+	tee_shm_free(dd->shm_pool);
+	tee_client_close_session(dd->octx, dd->session_id);
+	tee_client_close_context(dd->octx);
+	dd->octx = NULL;
+}
+
+static int ma35_rsa_ioctl_set_register(struct nu_rsa_ctx *rsa_ctx, int offs, unsigned long arg)
 {
 	int ret, sz;
 	u8 kbuf[520];
@@ -429,13 +545,15 @@ static int ma35_rsa_ioctl_set_register(struct nu_rsa_ctx *rsa_ctx, int offs,
 	return ret;
 }
 
-static long ma35_rsa_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
+static long ma35_rsa_optee_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	struct nu_rsa_ctx *rsa_ctx = filp->private_data;
 	struct nu_rsa_dev *dd;
+	struct tee_ioctl_invoke_arg inv_arg;
+	struct tee_param param[4];
 	u8 m[NU_RSA_MAX_BYTE_LEN];
-	unsigned long timeout;
 	int keyleng, len;
+	int err;
 
 	if (!rsa_ctx)
 		return -EIO;
@@ -474,7 +592,7 @@ static long ma35_rsa_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
 	case RSA_IOC_RUN:
 		memset(&rsa_ctx->buffer[ANS_OFF], 0, NU_RSA_MAX_BYTE_LEN);
 		rsa_ctx->dma_buff = dma_map_single(dd->dev, rsa_ctx->buffer,
-						   RSA_BUFF_SIZE, DMA_BIDIRECTIONAL);
+				RSA_BUFF_SIZE, DMA_BIDIRECTIONAL);
 		if (unlikely(dma_mapping_error(dd->dev, rsa_ctx->dma_buff))) {
 			dev_err(dd->dev, "RSA buffer DMA map error\n");
 			return -EINVAL;
@@ -495,15 +613,40 @@ static long ma35_rsa_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
 
 		keyleng = rsa_ctx->rsa_bit_len/1024 - 1;
 		ma35_write_reg(dd, (keyleng << RSA_CTL_KEYLENG_OFFSET) |
-			       RSA_CTL_START, RSA_CTL);
+				RSA_CTL_START, RSA_CTL);
 
-		timeout = jiffies + msecs_to_jiffies(2000);
-		while (ma35_read_reg(dd, RSA_STS) & RSA_STS_BUSY) {
-			if (time_after(jiffies, timeout)) {
-				pr_err("RSA decrypt time-out!\n");
-				return -EIO;
-			}
+		/*
+		 *  Invoke OP-TEE Crypto PTA to run RSA
+		 */
+		memset(&inv_arg, 0, sizeof(inv_arg));
+		memset(&param, 0, sizeof(param));
+
+		/* Invoke PTA_CMD_CRYPTO_RSA_RUN function of Trusted App */
+		inv_arg.func = PTA_CMD_CRYPTO_RSA_RUN;
+		inv_arg.session = dd->session_id;
+		inv_arg.num_params = 4;
+
+		/* Fill invoke cmd params */
+		param[1].attr = TEE_IOCTL_PARAM_ATTR_TYPE_MEMREF_INOUT;
+
+		param[1].u.memref.shm = dd->shm_pool;
+		param[1].u.memref.size = CRYPTO_SHM_SIZE;
+		param[1].u.memref.shm_offs = 0;
+
+		memcpy(&(dd->va_shm[0x1000/4]), rsa_ctx->buffer, RSA_BUFF_SIZE);
+		memset(&(dd->va_shm[0x3000/4]), 0, 0x200);
+
+		dma_sync_single_for_device(dd->dev, rsa_ctx->dma_buff,
+					   RSA_BUFF_SIZE, DMA_TO_DEVICE);
+
+		err = tee_client_invoke_func(dd->octx, &inv_arg, param);
+		if ((err < 0) || (inv_arg.ret != 0)) {
+			pr_err("PTA_CMD_CRYPTO_RSA_RUN err: %x\n", inv_arg.ret);
+			dma_unmap_single(dd->dev, rsa_ctx->dma_buff, RSA_BUFF_SIZE,
+					 DMA_BIDIRECTIONAL);
+			return -EINVAL;
 		}
+		memcpy((u32 *)&rsa_ctx->buffer[ANS_OFF], &(dd->va_shm[0x3000/4]), 0x200);
 
 		dma_unmap_single(dd->dev, rsa_ctx->dma_buff, RSA_BUFF_SIZE,
 				 DMA_BIDIRECTIONAL);
@@ -521,7 +664,7 @@ static long ma35_rsa_ioctl(struct file *filp, unsigned int cmd, unsigned long ar
 	return 0;
 }
 
-static int ma35_rsa_open(struct inode *inode, struct file *file)
+static int ma35_rsa_optee_open(struct inode *inode, struct file *file)
 {
 	struct nu_rsa_ctx  *rsa_ctx;
 
@@ -532,10 +675,14 @@ static int ma35_rsa_open(struct inode *inode, struct file *file)
 	rsa_ctx->dd = __rsa_dd;
 	file->private_data = rsa_ctx;
 
+	if (__rsa_dd->octx == NULL) {
+		if (optee_rsa_open(__rsa_dd) != 0)
+			return -ENODEV;
+	}
 	return 0;
 }
 
-static int ma35_rsa_close(struct inode *inode, struct file *file)
+static int ma35_rsa_optee_close(struct inode *inode, struct file *file)
 {
 	struct nu_rsa_ctx  *rsa_ctx;
 
@@ -546,20 +693,20 @@ static int ma35_rsa_close(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static const struct file_operations ma35_rsa_fops = {
+static const struct file_operations ma35_rsa_optee_fops = {
 	.owner		= THIS_MODULE,
-	.unlocked_ioctl	= ma35_rsa_ioctl,
-	.open           = ma35_rsa_open,
-	.release        = ma35_rsa_close,
+	.unlocked_ioctl	= ma35_rsa_optee_ioctl,
+	.open           = ma35_rsa_optee_open,
+	.release        = ma35_rsa_optee_close,
 };
 
-static struct miscdevice ma35_rsa_dev = {
+static struct miscdevice ma35_rsa_optee_dev = {
 	.minor		= MISC_DYNAMIC_MINOR,
 	.name		= "nuvoton-rsa",
-	.fops		= &ma35_rsa_fops,
+	.fops		= &ma35_rsa_optee_fops,
 };
 
-int ma35_rsa_probe(struct device *dev, struct nu_crypto_dev *crypto_dev)
+int ma35_rsa_optee_probe(struct device *dev, struct nu_crypto_dev *crypto_dev)
 {
 	struct nu_rsa_dev *rsa_dd = &crypto_dev->rsa_dd;
 	int err = 0;
@@ -575,16 +722,16 @@ int ma35_rsa_probe(struct device *dev, struct nu_crypto_dev *crypto_dev)
 	spin_unlock(&nu_rsa.lock);
 
 	if (crypto_dev->rsa_ioctl == true) {
-		misc_register(&ma35_rsa_dev);
+		misc_register(&ma35_rsa_optee_dev);
 	} else {
-		err = crypto_register_akcipher(&ma35_rsa_alg);
+		err = crypto_register_akcipher(&ma35_rsa_optee_alg);
 		if (err) {
-			pr_err("[%s] - failed to register ma35_rsa_alg! %d\n",
+			pr_err("[%s] - failed to register ma35_rsa_optee_alg! %d\n",
 				__func__, err);
 			goto err_out;
 		}
 	}
-	pr_info("ma35 crypto rsa engine enabled.\n");
+	pr_info("ma35 crypto rsa optee enabled.\n");
 	return 0;
 
 err_out:
@@ -594,7 +741,7 @@ err_out:
 	return err;
 }
 
-int ma35_rsa_remove(struct device *dev, struct nu_crypto_dev *crypto_dev)
+int ma35_rsa_optee_remove(struct device *dev, struct nu_crypto_dev *crypto_dev)
 {
 	struct nu_rsa_dev *rsa_dd = &crypto_dev->rsa_dd;
 
@@ -602,13 +749,14 @@ int ma35_rsa_remove(struct device *dev, struct nu_crypto_dev *crypto_dev)
 		return -ENODEV;
 
 	if (crypto_dev->rsa_ioctl == true)
-		misc_deregister(&ma35_rsa_dev);
+		misc_deregister(&ma35_rsa_optee_dev);
 	else
-		crypto_unregister_akcipher(&ma35_rsa_alg);
+		crypto_unregister_akcipher(&ma35_rsa_optee_alg);
 
 	spin_lock(&nu_rsa.lock);
 	list_del(&rsa_dd->list);
 	spin_unlock(&nu_rsa.lock);
 
+	optee_rsa_close(rsa_dd);
 	return 0;
 }

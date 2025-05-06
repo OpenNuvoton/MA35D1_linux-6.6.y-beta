@@ -151,7 +151,6 @@ static int ma35_crypto_remove(struct platform_device *pdev)
 }
 
 static const struct of_device_id ma35_crypto_of_match[] = {
-	{ .compatible = "nuvoton,ma35d1-crypto" },
 	{ .compatible = "nuvoton,ma35d0-crypto" },
 	{ .compatible = "nuvoton,ma35h0-crypto" },
 	{},
@@ -163,14 +162,14 @@ static struct platform_driver ma35_crypto_driver = {
 	.probe  = ma35_crypto_probe,
 	.remove = ma35_crypto_remove,
 	.driver = {
-		.name   = "ma35-crypto",
-		.owner  = THIS_MODULE,
-		.of_match_table = of_match_ptr(ma35_crypto_of_match),
+		.name = "ma35-crypto",
+		.owner = THIS_MODULE,
+		.of_match_table = ma35_crypto_of_match,
 	},
 };
 
 module_platform_driver(ma35_crypto_driver);
 
 MODULE_AUTHOR("Nuvoton Technology Corporation");
-MODULE_DESCRIPTION("Nuvoton Cryptographic Accerlerator");
+MODULE_DESCRIPTION("Nuvoton Cryptographic Accelerator");
 MODULE_LICENSE("GPL");

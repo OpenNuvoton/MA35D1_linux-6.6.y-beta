@@ -32,7 +32,6 @@
 
 #include "ma35-crypto.h"
 
-#define AES_QUEUE_LENGTH	8
 #define AES_FLAGS_BUSY		BIT(1)
 
 static u8  g_zeros[16] = { 0 };
@@ -126,7 +125,7 @@ static int ma35_aes_buffer_to_sg(struct nu_aes_dev *dd, u8 *bptr, int max_cnt)
 
 static int ma35_aes_get_output(struct nu_aes_dev *dd)
 {
-	struct nu_aes_base_ctx  *ctx = dd->ctx;
+	struct nu_aes_base_ctx *ctx = dd->ctx;
 	int retval;
 
 	if ((ctx->mode & AES_CTL_OPMODE_MASK) == AES_MODE_GCM) {
@@ -227,8 +226,6 @@ static int ma35_aes_dma_run(struct nu_aes_dev *dd, u32 cascade)
 	ma35_write_reg(dd, dd->dma_len, AES_CNT);
 	ma35_write_reg(dd, dd->dma_inbuf, AES_SADDR);
 	ma35_write_reg(dd, dd->dma_outbuf, AES_DADDR);
-
-	// dump_AES_registers(dd);
 
 	/* start AES */
 	ma35_write_reg(dd, (ma35_read_reg(dd, AES_CTL) | dma_ctl | AES_CTL_START), AES_CTL);
@@ -354,7 +351,7 @@ static int ma35_aes_crypt(struct skcipher_request *req, u32 mode)
 
 static int ma35_aes_setkey(struct crypto_skcipher *tfm, const u8 *key, unsigned int keylen)
 {
-	struct nu_aes_base_ctx  *ctx = crypto_skcipher_ctx(tfm);
+	struct nu_aes_base_ctx *ctx = crypto_skcipher_ctx(tfm);
 
 	switch (keylen) {
 	case AES_KEYSIZE_128:
@@ -483,7 +480,7 @@ static int ma35_aes_cra_init(struct crypto_tfm *tfm)
 static struct skcipher_alg ma35_aes_algs[] = {
 {
 	.base.cra_name		= "cbc(aes)",
-	.base.cra_driver_name	= "nuvoton-cbc-aes",
+	.base.cra_driver_name	= "ma35-cbc-aes",
 	.base.cra_priority	= 400,
 	.base.cra_flags		= CRYPTO_ALG_ASYNC,
 	.base.cra_blocksize	= AES_BLOCK_SIZE,
@@ -501,7 +498,7 @@ static struct skcipher_alg ma35_aes_algs[] = {
 },
 {
 	.base.cra_name		= "ecb(aes)",
-	.base.cra_driver_name	= "nuvoton-ecb-aes",
+	.base.cra_driver_name	= "ma35-ecb-aes",
 	.base.cra_priority	= 400,
 	.base.cra_flags		= CRYPTO_ALG_ASYNC,
 	.base.cra_blocksize	= AES_BLOCK_SIZE,
@@ -518,7 +515,7 @@ static struct skcipher_alg ma35_aes_algs[] = {
 },
 {
 	.base.cra_name		= "cfb(aes)",
-	.base.cra_driver_name	= "nuvoton-cfb-aes",
+	.base.cra_driver_name	= "ma35-cfb-aes",
 	.base.cra_priority	= 400,
 	.base.cra_flags		= CRYPTO_ALG_ASYNC,
 	.base.cra_blocksize	= AES_BLOCK_SIZE,
@@ -536,7 +533,7 @@ static struct skcipher_alg ma35_aes_algs[] = {
 },
 {
 	.base.cra_name		= "ofb(aes)",
-	.base.cra_driver_name	= "nuvoton-ofb-aes",
+	.base.cra_driver_name	= "ma35-ofb-aes",
 	.base.cra_priority	= 400,
 	.base.cra_flags		= CRYPTO_ALG_ASYNC,
 	.base.cra_blocksize	= AES_BLOCK_SIZE,
@@ -554,7 +551,7 @@ static struct skcipher_alg ma35_aes_algs[] = {
 },
 {
 	.base.cra_name		= "ctr(aes)",
-	.base.cra_driver_name	= "nuvoton-ctr-aes",
+	.base.cra_driver_name	= "ma35-ctr-aes",
 	.base.cra_priority	= 400,
 	.base.cra_flags		= CRYPTO_ALG_ASYNC,
 	.base.cra_blocksize	= 1,
@@ -573,7 +570,7 @@ static struct skcipher_alg ma35_aes_algs[] = {
 #ifdef SUPPORT_SM4
 {
 	.base.cra_name		= "ecb(sm4)",
-	.base.cra_driver_name	= "nuvoton-ecb-sm4",
+	.base.cra_driver_name	= "ma35-ecb-sm4",
 	.base.cra_priority	= 400,
 	.base.cra_flags		= CRYPTO_ALG_ASYNC,
 	.base.cra_blocksize	= AES_BLOCK_SIZE,
@@ -590,7 +587,7 @@ static struct skcipher_alg ma35_aes_algs[] = {
 },
 {
 	.base.cra_name		= "cbc(sm4)",
-	.base.cra_driver_name	= "nuvoton-cbc-sm4",
+	.base.cra_driver_name	= "ma35-cbc-sm4",
 	.base.cra_priority	= 400,
 	.base.cra_flags		= CRYPTO_ALG_ASYNC,
 	.base.cra_blocksize	= AES_BLOCK_SIZE,
@@ -608,7 +605,7 @@ static struct skcipher_alg ma35_aes_algs[] = {
 },
 {
 	.base.cra_name		= "ctr(sm4)",
-	.base.cra_driver_name	= "nuvoton-ctr-sm4",
+	.base.cra_driver_name	= "ma35-ctr-sm4",
 	.base.cra_priority	= 400,
 	.base.cra_flags		= CRYPTO_ALG_ASYNC,
 	.base.cra_blocksize	= 1,
@@ -691,7 +688,7 @@ static int ma35_aes_gcm_dma_start(struct nu_aes_dev *dd, int err)
 
 	if (ctx->keylen == AES_KS_KEYLEN) {
 		/* configure AES Key from Key Store */
-		u8  *key = (u8 *)ctx->aes_key;
+		u8 *key = (u8 *)ctx->aes_key;
 
 		ma35_write_reg(dd, (key[1] << 7) | AES_KSCTL_RSRC | key[2], AES_KSCTL);
 	} else {
@@ -717,12 +714,11 @@ static int ma35_aes_gcm_dma_start(struct nu_aes_dev *dd, int err)
 	ma35_write_reg(dd, req->assoclen, AES_GCM_ACNT(0));
 	ma35_write_reg(dd, req->cryptlen, AES_GCM_PCNT(0));
 
-	ma35_write_reg(dd, (ctx->keysz_sel | ctx->mode | AES_CTL_INSWAP |
-			AES_CTL_OUTSWAP | AES_CTL_KOUTSWAP | AES_CTL_DMAEN),
-			AES_CTL);
+	ma35_write_reg(dd, (ctx->keysz_sel | ctx->mode | AES_CTL_INSWAP | AES_CTL_OUTSWAP |
+		       AES_CTL_KOUTSWAP | AES_CTL_DMAEN), AES_CTL);
 
-	pr_debug("[%s] - mode: 0x%08x, AES_CTL = 0x%x\n", __func__, ctx->mode,
-		 ma35_read_reg(dd, AES_CTL));
+	pr_debug("[%s] - mode: 0x%08x, AES_CTL = 0x%x\n", __func__,
+		 ctx->mode, ma35_read_reg(dd, AES_CTL));
 
 	return ma35_aes_dma_run(dd, 0);
 }
@@ -829,7 +825,7 @@ static struct aead_alg  ma35_aes_gcm_alg[] = {
 	.maxauthsize	= AES_BLOCK_SIZE,
 	.base = {
 		.cra_name		= "gcm(aes)",
-		.cra_driver_name	= "nuvoton-gcm-aes",
+		.cra_driver_name	= "ma35-gcm-aes",
 		.cra_priority		= 400,
 		.cra_flags		= CRYPTO_ALG_ASYNC,
 		.cra_blocksize		= 1,
@@ -849,12 +845,13 @@ static int ma35_aes_ccm_dma_start(struct nu_aes_dev *dd, int err)
 {
 	struct aead_request *req = aead_request_cast(dd->areq);
 	struct nu_aes_base_ctx *ctx = dd->ctx;
-	u8 *b;
 	int i, q, nlen, plen, alen, len_left, use_len;
 	int p_blk_cnt;
 	u8 ctr[16];
+	u8 *b;
 
-	pr_debug("[%s] - assoclen: %d, cryptlen: %d\n", __func__, req->assoclen, req->cryptlen);
+	pr_debug("[%s] - assoclen: %d, cryptlen: %d\n", __func__,
+		 req->assoclen, req->cryptlen);
 
 	ctx->assoclen = req->assoclen;
 
@@ -961,8 +958,8 @@ static int ma35_aes_ccm_dma_start(struct nu_aes_dev *dd, int err)
 	if (!(ctx->mode & AES_CTL_ENCRPT)) {
 		q = ma35_aes_sg_to_buffer(dd, ctx->tag,
 					  ((ctx->authsize > 16) ? 16 : ctx->authsize));
-		pr_debug("[%s] - CCM read tag return length: %d/%d\n",
-			 __func__, q, ctx->authsize);
+		pr_debug("[%s] - CCM read tag return length: %d/%d\n", __func__,
+			 q, ctx->authsize);
 	}
 
 	dd->dma_len = b - dd->inbuf;
@@ -1000,9 +997,8 @@ static int ma35_aes_ccm_dma_start(struct nu_aes_dev *dd, int err)
 	ma35_write_reg(dd, (dd->dma_len - (p_blk_cnt * 16)), AES_GCM_ACNT(0));
 	ma35_write_reg(dd, ctx->text_len, AES_GCM_PCNT(0));
 
-	ma35_write_reg(dd, (ctx->keysz_sel | ctx->mode | AES_CTL_INSWAP |
-			AES_CTL_OUTSWAP | AES_CTL_KINSWAP | AES_CTL_KOUTSWAP |
-			AES_CTL_DMAEN), AES_CTL);
+	ma35_write_reg(dd, (ctx->keysz_sel | ctx->mode | AES_CTL_INSWAP | AES_CTL_OUTSWAP |
+			    AES_CTL_KINSWAP | AES_CTL_KOUTSWAP | AES_CTL_DMAEN), AES_CTL);
 
 	pr_debug("[%s] - mode: 0x%08x, AES_CTL = 0x%x\n", __func__, ctx->mode,
 		 ma35_read_reg(dd, AES_CTL));
@@ -1069,7 +1065,7 @@ static struct aead_alg ma35_aes_ccm_alg[] = {
 	.maxauthsize	= AES_BLOCK_SIZE,
 	.base = {
 		.cra_name		= "ccm(aes)",
-		.cra_driver_name	= "nuvoton-ccm-aes",
+		.cra_driver_name	= "ma35-ccm-aes",
 		.cra_priority		= 400,
 		.cra_flags		= CRYPTO_ALG_ASYNC,
 		.cra_blocksize		= 1,
@@ -1164,7 +1160,7 @@ int ma35_aes_probe(struct device *dev, struct nu_crypto_dev *crypto_dev)
 	if (err)
 		goto err_algs;
 
-	pr_info("ma35 series crypto AES engine enabled.\n");
+	pr_info("ma35 series crypto aes engine enabled.\n");
 	return 0;
 
 err_algs:
