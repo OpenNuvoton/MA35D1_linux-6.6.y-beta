@@ -119,7 +119,7 @@ int ma35_prng_probe(struct device *dev, void __iomem *reg_base, unsigned long *d
 	if (err)
 		return err;
 
-	pr_info("MA35 PRNG inited.\n");
+	pr_info("ma35 crypto prng initialized.\n");
 	return 0;
 }
 

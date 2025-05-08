@@ -979,7 +979,7 @@ int ma35_sha_probe(struct device *dev, struct nu_crypto_dev *crypto_dev)
 			goto err_register;
 	}
 
-	pr_info("ma35 crypto sha engine enabled.\n");
+	pr_info("ma35 crypto sha engine initialized.\n");
 	return 0;
 
 err_register:

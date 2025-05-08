@@ -466,13 +466,11 @@
 		status = "disabled";
 	};
 
-	/* Crypto engine */
 	crypto_optee {
 		compatible = "nuvoton,ma35d1-crypto-optee";
 		status = "okay";
 	};
 
-	/* Crypto engine */
 	crypto:crypto@40300000 {
 		compatible = "nuvoton,ma35d0-crypto";
 		reg = <0x0 0x40300000 0x0 0x1000>;
@@ -482,7 +480,6 @@
 		status = "disabled";
 	};
 
-	/* Key Store */
 	key_store:ks@40340800 {
 		compatible = "nuvoton,ma35d1-ks";
 		reg = <0x0 0x40340800 0x0 0x800>;
@@ -491,13 +488,16 @@
 		status = "okay";
 	};
 
-	/* TRNG */
-	trng: trng@40B90000 {
-		compatible = "nuvoton,ma35d1-trng";
+	trng_optee {
+		compatible = "nuvoton,ma35d1-trng-optee";
+		status = "okay";
+	};
+
+	trng:trng@40b90000 {
+		compatible = "nuvoton,ma35d0-trng";
 		reg = <0x0 0x40B90000 0x0 0x400>;
 		interrupts = <GIC_SPI 40 IRQ_TYPE_LEVEL_HIGH>;
-		optee_nuvoton = "yes";
-		status = "okay";
+		status = "disabled";
 	};
 
 	rtc: rtc@40410000 {

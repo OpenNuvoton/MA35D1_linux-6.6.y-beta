@@ -152,19 +152,19 @@ static int ma35_crypto_optee_probe(struct platform_device *pdev)
 
 	err = ma35_aes_optee_probe(dev, crypto_dev);
 	if (err)
-		dev_err(dev, "failed to init AES!\n");
+		dev_err(dev, "failed to init ma35-aes-optee!\n");
 
 	err = ma35_sha_optee_probe(dev, crypto_dev);
 	if (err)
-		dev_err(dev, "failed to init SHA!\n");
+		dev_err(dev, "failed to init ma35-sha-optee!\n");
 
 	err = ma35_ecc_optee_probe(dev, crypto_dev);
 	if (err)
-		dev_err(dev, "failed to init ECC!\n");
+		dev_err(dev, "failed to init ma35-ecc-optee!\n");
 
 	err = ma35_rsa_optee_probe(dev, crypto_dev);
 	if (err)
-		dev_err(dev, "failed to init RSA!\n");
+		dev_err(dev, "failed to init ma35-rsa-optee!\n");
 
 	return 0;
 }

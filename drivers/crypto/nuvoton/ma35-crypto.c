@@ -87,7 +87,7 @@ static int ma35_crypto_probe(struct platform_device *pdev)
 	 */
 	irq = platform_get_irq(pdev, 0);
 	if (irq <= 0) {
-		dev_err(dev, "Failed to get Crypto irq!\n");
+		dev_err(dev, "Failed to get ma35 crypto irq!\n");
 		return -ENODEV;
 	}
 	err = devm_request_irq(dev, irq, ma35_crypto_irq, IRQF_SHARED,
@@ -99,15 +99,15 @@ static int ma35_crypto_probe(struct platform_device *pdev)
 
 	err = ma35_prng_probe(dev, crypto_dev->reg_base, &crypto_dev->prng);
 	if (err)
-		dev_err(dev, "failed to init PRNG!\n");
+		dev_err(dev, "failed to init ma35-prng!\n");
 
 	err = ma35_aes_probe(dev, crypto_dev);
 	if (err)
-		dev_err(dev, "failed to init AES!\n");
+		dev_err(dev, "failed to init ma35-aes!\n");
 
 	err = ma35_sha_probe(dev, crypto_dev);
 	if (err)
-		dev_err(dev, "failed to init SHA!\n");
+		dev_err(dev, "failed to init ma35-sha!\n");
 
 	crypto_dev->ecc_ioctl = false;
 	if (!of_property_read_string(dev->of_node, "ecc_ioctl", &str)) {
@@ -116,7 +116,7 @@ static int ma35_crypto_probe(struct platform_device *pdev)
 	}
 	err = ma35_ecc_probe(dev, crypto_dev);
 	if (err)
-		dev_err(dev, "failed to init ECC!\n");
+		dev_err(dev, "failed to init ma35-ecc!\n");
 
 	crypto_dev->rsa_ioctl = false;
 	if (!of_property_read_string(dev->of_node, "rsa_ioctl", &str)) {
@@ -125,7 +125,7 @@ static int ma35_crypto_probe(struct platform_device *pdev)
 	}
 	err = ma35_rsa_probe(dev, crypto_dev);
 	if (err)
-		dev_err(dev, "failed to init RSA!\n");
+		dev_err(dev, "failed to init ma35-rsa!\n");
 
 	return 0;
 }

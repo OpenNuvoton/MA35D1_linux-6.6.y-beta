@@ -1160,7 +1160,7 @@ int ma35_aes_probe(struct device *dev, struct nu_crypto_dev *crypto_dev)
 	if (err)
 		goto err_algs;
 
-	pr_info("ma35 series crypto aes engine enabled.\n");
+	pr_info("ma35 series crypto aes engine initialized.\n");
 	return 0;
 
 err_algs:

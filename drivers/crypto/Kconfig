@@ -684,7 +684,7 @@ config CRYPTO_DEV_ZYNQMP_SHA3
 config CRYPTO_DEV_NUVOTON_MA35
 	bool "Nuvoton's MA35 Series Cryptographic Accelerator driver"
 	default y
-	depends on ARCH_MA35D1
+	depends on ARCH_MA35D1 || ARCH_MA35D0 || ARCH_MA35H0
 	select CRYPTO_AES
 	select CRYPTO_AEAD
 	select CRYPTO_BLKCIPHER

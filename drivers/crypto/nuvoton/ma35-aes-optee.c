@@ -1485,7 +1485,7 @@ int ma35_aes_optee_probe(struct device *dev, struct nu_crypto_dev *crypto_dev)
 	if (err)
 		goto err_algs;
 
-	pr_info("ma35 crypto aes optee enabled.\n");
+	pr_info("ma35 crypto aes optee initialized.\n");
 	return 0;
 
 err_algs:

@@ -731,7 +731,7 @@ int ma35_rsa_optee_probe(struct device *dev, struct nu_crypto_dev *crypto_dev)
 			goto err_out;
 		}
 	}
-	pr_info("ma35 crypto rsa optee enabled.\n");
+	pr_info("ma35 crypto rsa optee initialized.\n");
 	return 0;
 
 err_out:
