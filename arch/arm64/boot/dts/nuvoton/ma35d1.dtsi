@@ -480,12 +480,16 @@
 		status = "disabled";
 	};
 
-	key_store:ks@40340800 {
-		compatible = "nuvoton,ma35d1-ks";
+	kstroe_optee {
+		compatible = "nuvoton,ma35d1-kstore-optee";
+		status = "okay";
+	};
+
+	key_store:kstore@40340800 {
+		compatible = "nuvoton,ma35d0-kstore";
 		reg = <0x0 0x40340800 0x0 0x800>;
 		interrupts = <GIC_SPI 41 IRQ_TYPE_LEVEL_HIGH>;
-		optee_nuvoton = "yes";
-		status = "okay";
+		status = "disabled";
 	};
 
 	trng_optee {

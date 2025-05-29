@@ -562,23 +562,12 @@ config TPS6594_PFSM
 	  This driver can also be built as a module.  If so, the module
 	  will be called tps6594-pfsm.
 
-config MA35D1_KS
-	tristate "Nuvoton MA35D1 Key Store support"
-	depends on ARCH_MA35D1
+config MA35_KEYSTORE
+	tristate "Nuvoton MA35 Serious SoC Key Store support"
+	depends on ARCH_MA35D1 || ARCH_MA35D0 || ARCH_MA35H0
+	default y
 	help
-	  This driver provides support for Nuvoton MA35D1 Key Store.
-
-config MA35D0_KS
-	tristate "Nuvoton MA35D0 Key Store support"
-	depends on ARCH_MA35D0
-	help
-	  This driver provides support for Nuvoton MA35D0 Key Store.
-
-config MA35H0_KS
-	tristate "Nuvoton MA35H0 Key Store support"
-	depends on ARCH_MA35H0
-	help
-	  This driver provides support for Nuvoton MA35H0 Key Store.
+	  This driver provides support for Nuvoton MA35 Series SoC Key Store.
 
 config MA35D1_EBI
 	tristate "Nuvoton MA35D1 EBI support"
