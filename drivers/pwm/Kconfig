@@ -374,6 +374,30 @@ config PWM_LPSS_PLATFORM
 	  To compile this driver as a module, choose M here: the module
 	  will be called pwm-lpss-platform.
 
+config PWM_MA35D1
+	tristate "Nuvoton MA35D1 PWM support"
+	help
+	  Generic PWM framework driver for Nuvoton MA35D1.
+
+	  To compile this driver as a module, choose M here: the module
+	  will be called pwm-ma35d1.
+
+config PWM_MA35D0
+	tristate "Nuvoton MA35D0 PWM support"
+	help
+	  Generic PWM framework driver for Nuvoton MA35D0.
+
+	  To compile this driver as a module, choose M here: the module
+	  will be called pwm-ma35d1.
+
+config PWM_MA35H0
+	tristate "Nuvoton MA35H0 PWM support"
+	help
+	  Generic PWM framework driver for Nuvoton MA35H0.
+
+	  To compile this driver as a module, choose M here: the module
+	  will be called pwm-ma35d1.
+
 config PWM_MESON
 	tristate "Amlogic Meson PWM driver"
 	depends on ARCH_MESON || COMPILE_TEST
