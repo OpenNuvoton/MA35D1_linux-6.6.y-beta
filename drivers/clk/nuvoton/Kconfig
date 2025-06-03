@@ -16,4 +16,16 @@ config CLK_MA35D1
 	help
 	  Build the clock controller driver for MA35D1 SoC.
 
+config CLK_MA35D0
+	bool "Nuvoton MA35D0 clock controller support"
+	default y
+	help
+	  Build the clock controller driver for MA35D0 SoC.
+
+config CLK_MA35H0
+	bool "Nuvoton MA35H0 clock controller support"
+	default y
+	help
+	  Build the clock controller driver for MA35H0 SoC.
+
 endif

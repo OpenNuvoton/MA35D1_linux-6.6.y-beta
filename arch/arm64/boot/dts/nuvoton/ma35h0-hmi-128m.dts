@@ -1,5 +1,5 @@
 /*
- * Device Tree Source for MA35D1 IoT Board
+ * Device Tree Source for MA35H0 HMI Board
  *
  * Copyright (C) 2021 Nuvoton Technology Corp.
  *
@@ -13,13 +13,28 @@
 
 /dts-v1/;
 
-#include "ma35d1.dtsi"
+#include "ma35h0.dtsi"
 
 / {
-	model = "Nuvoton MA35D1-IoT";
+	model = "Nuvoton MA35H0-HMI";
+
+	aliases {
+		i2c0 = &i2c0;
+	};
 
 	chosen {
 		bootargs = "root=/dev/mmcblk1p1 rootfstype=ext4 rw rootwait console=ttyS0,115200n8 rdinit=/sbin/init mem=128M";
+	};
+
+	reserved-memory {
+		display_buf: display_buf@0 {
+			reg = <0x0 0x84FF0000 0x0 0x1010000>; /* 17MiB */
+			no-map;
+		};
+		vc8k_buf: vc8k_buf@0 {
+                       reg = <0x0 0x86000000 0x0 0x1800000>; /* 24MiB */
+			no-map;
+		};
 	};
 
 	gpio_keys_test {
@@ -29,25 +44,19 @@
 		botton0 {
 			label = "Key Down";
 			linux,code = <KEY_DOWN>;
-			gpios = <&gpion 2 GPIO_ACTIVE_LOW>;
+			gpios = <&gpiok 10 GPIO_ACTIVE_LOW>;
 			wakeup-source;
 		};
 		button1{
 			label ="Key Up";
 			linux,code = <KEY_UP>;
-			gpios = <&gpion 3 GPIO_ACTIVE_LOW>;
+			gpios = <&gpiok 11 GPIO_ACTIVE_LOW>;
 			wakeup-source;
 		};
 		botton2 {
 			label = "Key Left";
 			linux,code = <KEY_LEFT>;
-			gpios = <&gpion 12 GPIO_ACTIVE_LOW>;
-			wakeup-source;
-		};
-		button3 {
-			label ="Key Right";
-			linux,code = <KEY_RIGHT>;
-			gpios = <&gpion 13 GPIO_ACTIVE_LOW>;
+			gpios = <&gpiom 2 GPIO_ACTIVE_LOW>;
 			wakeup-source;
 		};
 	};
@@ -69,7 +78,7 @@
 		};
 	};
 
-	volt0_sdhci1: regulator-volt0_sdhci1 {
+        volt0_sdhci1: regulator-volt0_sdhci1 {
 		compatible = "regulator-gpio";
 		regulator-name = "volt1_sdhci1";
 		regulator-min-microvolt = <1800000>;
@@ -79,7 +88,7 @@
 		states = <1800000 0x1 3300000 0x0>;
 		enable-active-high;
 		regulator-boot-on;
-	};
+        };
 };
 
 &mem {
@@ -87,51 +96,10 @@
 	reg = <0x00000000 0x80000000 0 0x08000000>; /* DRAM space - 1, size : 128MB DRAM */
 };
 
-&ccap0 {
-        status = "disabled";
-	port {
-		/* Parallel bus endpoint */
-		ccap0_1: endpoint {
-			remote-endpoint = <&hm1055_0>;
-			hsync-active = <0>;     /* Active low */
-			vsync-active = <0>;     /* Active low */
-			pclk-sample = <1>;      /* Rising */
-		};
-	};
-};
-
-&i2c3 {
-	status = "disabled";
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_i2c3>;
-	hm1055@24 {
-		compatible = "himax,hm1055";
-		reg = <0x24>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_ccap0>;
-		clocks = <&clk CCAP0_GATE>;
-		clock-names = "xclk";
-		reset-gpios = <&gpiom 1 GPIO_ACTIVE_LOW>; /* PM1 */
-		powerdown-gpios = <&gpiok 8 GPIO_ACTIVE_HIGH>; /* PK8 */
-		port {
-			hm1055_0: endpoint {
-				remote-endpoint = <&ccap0_1>;
-			};
-		};
-	};
-};
-
-&gmac0 {
+&emac0 {
 	status = "okay";
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_gmac0>;
-};
-
-&gmac1 {
-	status = "okay";
-	phy-mode = "rmii";
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_gmac1>;
+	pinctrl-0 = <&pinctrl_emac0>;
 };
 
 &ehci0 {
@@ -150,13 +118,21 @@
 	pinctrl-0 = <&pinctrl_nand>;
 };
 
+&sdhci0 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_sdhci0>;
+	disable-wp;
+};
+
 &sdhci1 {
 	status = "okay";
-	disable-wp;
 	pinctrl-names = "sdhci_3V3","sdhci_1V8";
 	pinctrl-0 = <&pinctrl_sdhci1_3_3V>;
 	pinctrl-1 = <&pinctrl_sdhci1_1_8V>;
+	bus-width = <4>;
 	vqmmc-supply = <&volt0_sdhci1>;
+	power-gpios = <&gpiok 9 GPIO_ACTIVE_LOW>; /* PK9 */
 };
 
 &epwm0 {
@@ -171,10 +147,10 @@
 	pinctrl-0 = <&pinctrl_adc0>;
 };
 
-&i2c1 {
+&i2c0 {
 	status = "okay";
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_i2c1>;
+	pinctrl-0 = <&pinctrl_i2c0>;
 
 	#address-cells = <1>;
 	#size-cells = <0>;
@@ -185,53 +161,43 @@
 	};
 };
 
-&i2c2 {
-	status = "okay";
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_i2c2>;
-};
-
-&i2c4 {
-	status = "okay";
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_i2c4>;
-};
-
 &i2c5 {
-	status = "okay";
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_i2c5>;
+	status = "disabled";
+
+	goodix_ts@5d {
+		compatible = "goodix,gt911";
+		status = "disabled";
+		reg = <0x5d>;
+		interrupt-parent = <&gpiok>;
+		interrupts = <12 2>;
+		reset-gpios = <&gpiof 1 0x00>;
+		irq-gpios = <&gpiok 12 0x00>;
+		touchscreen-size-x = <1024>;
+		touchscreen-size-y = <600>;
+		touchscreen-inverted-x = <1>;
+		touchscreen-inverted-y = <1>;
+	};
 };
 
-&uart10 {
-	status = "okay";
+&uart6 {
+	status = "disabled";
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_uart10>;
+	pinctrl-0 = <&pinctrl_uart6>;
 };
 
-&uart12 {
-	status = "okay";
+&uart16 {
+	status = "disabled";
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_uart12>;
-};
-
-&uart13 {
-	status = "okay";
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_uart13>;
-};
-
-&uart14 {
-	status = "okay";
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_uart14>;
+	pinctrl-0 = <&pinctrl_uart16>;
 };
 
 &i2s0 {
 	status = "okay";
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_i2s0>;
-	powerdown-gpios = <&gpioc 2 GPIO_ACTIVE_HIGH>; /* PC2 */
+	powerdown-gpios = <&gpiom 6 GPIO_ACTIVE_HIGH>; /* PM6 */
 };
 
 &i2s_pcm {
@@ -254,52 +220,39 @@
 	pinctrl-0 = <&pinctrl_spi1>;
 };
 
-&spi2 {
-	status = "okay";
+&can0 {
+	status = "disabled";
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_spi2>;
+	pinctrl-0 = <&pinctrl_can0>;
 };
 
-&can1 {
-	status = "okay";
+&display {
 	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_can1>;
+	pinctrl-0 = <&pinctrl_display0>;
+	memory-region = <&display_buf>;
+	status = "okay";
+};
+
+&vc8k {
+	memory-region = <&vc8k_buf>;
+	debug_level = <1>;
+	status = "okay";
 };
 
 &pinctrl {
-	gmac0 {
-		pinctrl_gmac0: gmac0grp{
+	emac0 {
+		pinctrl_emac0: emac0grp{
 			nuvoton,pins =
-				<SYS_GPE_MFPL_PE0MFP_RGMII0_MDC		&pcfg_emac_1_8V>,
-				<SYS_GPE_MFPL_PE1MFP_RGMII0_MDIO	&pcfg_emac_1_8V>,
-				<SYS_GPE_MFPL_PE2MFP_RGMII0_TXCTL	&pcfg_emac_1_8V>,
-				<SYS_GPE_MFPL_PE3MFP_RGMII0_TXD0	&pcfg_emac_1_8V>,
-				<SYS_GPE_MFPL_PE4MFP_RGMII0_TXD1	&pcfg_emac_1_8V>,
-				<SYS_GPE_MFPL_PE5MFP_RGMII0_RXCLK	&pcfg_emac_1_8V>,
-				<SYS_GPE_MFPL_PE6MFP_RGMII0_RXCTL	&pcfg_emac_1_8V>,
-				<SYS_GPE_MFPL_PE7MFP_RGMII0_RXD0	&pcfg_emac_1_8V>,
-				<SYS_GPE_MFPH_PE8MFP_RGMII0_RXD1	&pcfg_emac_1_8V>,
-				<SYS_GPE_MFPH_PE9MFP_RGMII0_RXD2	&pcfg_emac_1_8V>,
-				<SYS_GPE_MFPH_PE10MFP_RGMII0_RXD3	&pcfg_emac_1_8V>,
-				<SYS_GPE_MFPH_PE11MFP_RGMII0_TXCLK	&pcfg_emac_1_8V>,
-				<SYS_GPE_MFPH_PE12MFP_RGMII0_TXD2	&pcfg_emac_1_8V>,
-				<SYS_GPE_MFPH_PE13MFP_RGMII0_TXD3	&pcfg_emac_1_8V>;
-		};
-	};
-
-	gmac1 {
-		pinctrl_gmac1: gmac1grp{
-			nuvoton,pins =
-				<SYS_GPF_MFPL_PF0MFP_RMII1_MDC		&pcfg_emac_3_3V>,
-				<SYS_GPF_MFPL_PF1MFP_RMII1_MDIO		&pcfg_emac_3_3V>,
-				<SYS_GPF_MFPL_PF2MFP_RMII1_TXEN		&pcfg_emac_3_3V>,
-				<SYS_GPF_MFPL_PF3MFP_RMII1_TXD0		&pcfg_emac_3_3V>,
-				<SYS_GPF_MFPL_PF4MFP_RMII1_TXD1		&pcfg_emac_3_3V>,
-				<SYS_GPF_MFPL_PF5MFP_RMII1_REFCLK	&pcfg_emac_3_3V>,
-				<SYS_GPF_MFPL_PF6MFP_RMII1_CRSDV	&pcfg_emac_3_3V>,
-				<SYS_GPF_MFPL_PF7MFP_RMII1_RXD0		&pcfg_emac_3_3V>,
-				<SYS_GPF_MFPH_PF8MFP_RMII1_RXD1		&pcfg_emac_3_3V>,
-				<SYS_GPF_MFPH_PF9MFP_RMII1_RXERR	&pcfg_emac_3_3V>;
+				<SYS_GPE_MFPL_PE0MFP_RMII0_MDC		&pcfg_emac_3_3V>,
+				<SYS_GPE_MFPL_PE1MFP_RMII0_MDIO		&pcfg_emac_3_3V>,
+				<SYS_GPE_MFPL_PE2MFP_RMII0_TXEN		&pcfg_emac_3_3V>,
+				<SYS_GPE_MFPL_PE3MFP_RMII0_TXD0		&pcfg_emac_3_3V>,
+				<SYS_GPE_MFPL_PE4MFP_RMII0_TXD1		&pcfg_emac_3_3V>,
+				<SYS_GPE_MFPL_PE5MFP_RMII0_REFCLK	&pcfg_emac_3_3V>,
+				<SYS_GPE_MFPL_PE6MFP_RMII0_CRSDV	&pcfg_emac_3_3V>,
+				<SYS_GPE_MFPL_PE7MFP_RMII0_RXD0		&pcfg_emac_3_3V>,
+				<SYS_GPE_MFPH_PE8MFP_RMII0_RXD1		&pcfg_emac_3_3V>,
+				<SYS_GPE_MFPH_PE9MFP_RMII0_RXERR	&pcfg_emac_3_3V>;
 		};
 	};
 
@@ -330,79 +283,47 @@
 		};
 	};
 
-	i2c1 {
-		pinctrl_i2c1: i2c1grp{
+	i2c0 {
+		pinctrl_i2c0: i2c0grp{
 			nuvoton,pins =
-				<SYS_GPN_MFPL_PN4MFP_I2C1_SDA	&pcfg_default>,
-				<SYS_GPN_MFPL_PN5MFP_I2C1_SCL	&pcfg_default>;
-		};
-	};
-
-
-	i2c2 {
-		pinctrl_i2c2: i2c2grp{
-			nuvoton,pins =
-				<SYS_GPN_MFPL_PN0MFP_I2C2_SDA   &pcfg_default>,
-				<SYS_GPN_MFPL_PN1MFP_I2C2_SCL    &pcfg_default>;
-		};
-	};
-
-	i2c3 {
-		pinctrl_i2c3: i2c3grp{
-			nuvoton,pins =
-				<SYS_GPM_MFPH_PM14MFP_I2C3_SDA	&pcfg_default>,
-				<SYS_GPM_MFPH_PM15MFP_I2C3_SCL	&pcfg_default>;
-		};
-	};
-
-	i2c4 {
-		pinctrl_i2c4: i2c4grp{
-			nuvoton,pins =
-				<SYS_GPC_MFPL_PC0MFP_I2C4_SDA	&pcfg_default>,
-				<SYS_GPC_MFPL_PC1MFP_I2C4_SCL	&pcfg_default>;
+				<SYS_GPM_MFPH_PM8MFP_I2C0_SDA	&pcfg_default>,
+				<SYS_GPM_MFPH_PM9MFP_I2C0_SCL	&pcfg_default>;
 		};
 	};
 
 	i2c5 {
 		pinctrl_i2c5: i2c5grp{
 			nuvoton,pins =
-				<SYS_GPC_MFPL_PC4MFP_I2C5_SDA	&pcfg_default>,
-				<SYS_GPC_MFPL_PC5MFP_I2C5_SCL	&pcfg_default>;
+				<SYS_GPM_MFPL_PM4MFP_I2C5_SDA		&pcfg_default>,
+				<SYS_GPM_MFPL_PM5MFP_I2C5_SCL		&pcfg_default>;
 		};
 	};
 
-	uart10 {
-		pinctrl_uart10: uart10grp{
+	can0 {
+		pinctrl_can0: can0grp{
 			nuvoton,pins =
-				<SYS_GPH_MFPL_PH4MFP_UART10_nCTS	&pcfg_default>,
-				<SYS_GPH_MFPL_PH5MFP_UART10_nRTS	&pcfg_default>,
-				<SYS_GPH_MFPL_PH6MFP_UART10_RXD	&pcfg_default>,
-				<SYS_GPH_MFPL_PH7MFP_UART10_TXD	&pcfg_default>;
+				<SYS_GPN_MFPL_PN2MFP_CAN0_RXD	&pcfg_default>,
+				<SYS_GPN_MFPL_PN3MFP_CAN0_TXD	&pcfg_default>;
 		};
 	};
 
-	uart12 {
-		pinctrl_uart12: uart12grp{
+	uart6 {
+		pinctrl_uart6: uart6grp{
 			nuvoton,pins =
-				<SYS_GPC_MFPH_PC13MFP_UART12_nRTS	&pcfg_default>,
-				<SYS_GPC_MFPH_PC14MFP_UART12_RXD	&pcfg_default>,
-				<SYS_GPC_MFPH_PC15MFP_UART12_TXD	&pcfg_default>;
+				<SYS_GPN_MFPH_PN12MFP_UART6_nCTS	&pcfg_default>,
+				<SYS_GPN_MFPH_PN13MFP_UART6_nRTS	&pcfg_default>,
+				<SYS_GPN_MFPH_PN14MFP_UART6_RXD	&pcfg_default>,
+				<SYS_GPN_MFPH_PN15MFP_UART6_TXD	&pcfg_default>;
 		};
 	};
 
-	uart13 {
-		pinctrl_uart13: uart13grp{
+	uart16 {
+		pinctrl_uart16: uart16grp{
 			nuvoton,pins =
-				<SYS_GPH_MFPH_PH12MFP_UART13_RXD	&pcfg_default>,
-				<SYS_GPH_MFPH_PH13MFP_UART13_TXD	&pcfg_default>;
-		};
-	};
-
-	uart14 {
-		pinctrl_uart14: uart14grp{
-			nuvoton,pins =
-				<SYS_GPH_MFPH_PH14MFP_UART14_RXD	&pcfg_default>,
-				<SYS_GPH_MFPH_PH15MFP_UART14_TXD	&pcfg_default>;
+				<SYS_GPD_MFPH_PD8MFP_UART16_nCTS	&pcfg_default>,
+				<SYS_GPD_MFPH_PD9MFP_UART16_nRTS	&pcfg_default>,
+				<SYS_GPD_MFPH_PD10MFP_UART16_RXD	&pcfg_default>,
+				<SYS_GPD_MFPH_PD11MFP_UART16_TXD	&pcfg_default>;
 		};
 	};
 
@@ -439,24 +360,6 @@
 		};
 	};
 
-	spi2 {
-		pinctrl_spi2: spi2grp{
-			nuvoton,pins =
-				<SYS_GPG_MFPH_PG8MFP_SPI2_SS0	&pcfg_default>,
-				<SYS_GPG_MFPH_PG9MFP_SPI2_CLK	&pcfg_default>,
-				<SYS_GPG_MFPH_PG10MFP_SPI2_MOSI	&pcfg_default>,
-				<SYS_GPK_MFPL_PK4MFP_SPI2_MISO	&pcfg_default>;
-		};
-	};
-
-	can1 {
-		pinctrl_can1: can1grp{
-			nuvoton,pins =
-				<SYS_GPC_MFPL_PC6MFP_CAN1_RXD	&pcfg_default>,
-				<SYS_GPC_MFPL_PC7MFP_CAN1_TXD	&pcfg_default>;
-		};
-	};
-
 	usb {
 		pinctrl_usb: usbgrp{
 			nuvoton,pins =
@@ -484,6 +387,20 @@
 				<SYS_GPA_MFPH_PA14MFP_NAND_nWP	&pcfg_default>;
 		};
 	};
+	
+	sdhci0 {
+		pinctrl_sdhci0: sdhci0grp{
+			nuvoton,pins =
+				<SYS_GPC_MFPL_PC0MFP_eMMC0_CMD	&pcfg_sdhci_drive2_3_3V>,
+				<SYS_GPC_MFPL_PC1MFP_eMMC0_CLK	&pcfg_sdhci_drive2_3_3V>,
+				<SYS_GPC_MFPL_PC2MFP_eMMC0_DAT0	&pcfg_sdhci_drive2_3_3V>,
+				<SYS_GPC_MFPL_PC3MFP_eMMC0_DAT1	&pcfg_sdhci_drive2_3_3V>,
+				<SYS_GPC_MFPL_PC4MFP_eMMC0_DAT2	&pcfg_sdhci_drive2_3_3V>,
+				<SYS_GPC_MFPL_PC5MFP_eMMC0_DAT3	&pcfg_sdhci_drive2_3_3V>,
+				<SYS_GPC_MFPL_PC6MFP_SD0_nCD	&pcfg_default>,
+				<SYS_GPC_MFPL_PC7MFP_SD0_WP	&pcfg_default>;
+		};
+	};
 
 	sdhci1 {
 		pinctrl_sdhci1_3_3V: sdhci1_3_3Vgrp{
@@ -509,21 +426,37 @@
 		};
 	};
 
-	ccap0 {
-		pinctrl_ccap0: ccap0grp{
+	display {
+		pinctrl_display0: display0grp{
 			nuvoton,pins =
-				<SYS_GPK_MFPH_PK9MFP_CCAP0_SCLK		&pcfg_default>,
-				<SYS_GPK_MFPH_PK10MFP_CCAP0_PIXCLK	&pcfg_default>,
-				<SYS_GPK_MFPH_PK11MFP_CCAP0_HSYNC	&pcfg_default>,
-				<SYS_GPM_MFPL_PM0MFP_CCAP0_VSYNC	&pcfg_default>,
-				<SYS_GPM_MFPL_PM2MFP_CCAP0_DATA0	&pcfg_default>,
-				<SYS_GPM_MFPL_PM3MFP_CCAP0_DATA1	&pcfg_default>,
-				<SYS_GPM_MFPL_PM4MFP_CCAP0_DATA2	&pcfg_default>,
-				<SYS_GPM_MFPL_PM5MFP_CCAP0_DATA3	&pcfg_default>,
-				<SYS_GPM_MFPL_PM6MFP_CCAP0_DATA4	&pcfg_default>,
-				<SYS_GPM_MFPL_PM7MFP_CCAP0_DATA5	&pcfg_default>,
-				<SYS_GPM_MFPH_PM8MFP_CCAP0_DATA6	&pcfg_default>,
-				<SYS_GPM_MFPH_PM9MFP_CCAP0_DATA7	&pcfg_default>;
+				<SYS_GPG_MFPH_PG8MFP_LCM_VSYNC		&pcfg_default>,
+				<SYS_GPG_MFPH_PG9MFP_LCM_HSYNC		&pcfg_default>,
+				<SYS_GPG_MFPH_PG10MFP_LCM_CLK		&pcfg_default>,
+				<SYS_GPK_MFPL_PK4MFP_LCM_DEN		&pcfg_default>,
+				<SYS_GPI_MFPH_PI8MFP_LCM_DATA0		&pcfg_default>,
+				<SYS_GPI_MFPH_PI9MFP_LCM_DATA1		&pcfg_default>,
+				<SYS_GPI_MFPH_PI10MFP_LCM_DATA2		&pcfg_default>,
+				<SYS_GPI_MFPH_PI11MFP_LCM_DATA3		&pcfg_default>,
+				<SYS_GPI_MFPH_PI12MFP_LCM_DATA4		&pcfg_default>,
+				<SYS_GPI_MFPH_PI13MFP_LCM_DATA5		&pcfg_default>,
+				<SYS_GPI_MFPH_PI14MFP_LCM_DATA6		&pcfg_default>,
+				<SYS_GPI_MFPH_PI15MFP_LCM_DATA7		&pcfg_default>,
+				<SYS_GPH_MFPL_PH0MFP_LCM_DATA8		&pcfg_default>,
+				<SYS_GPH_MFPL_PH1MFP_LCM_DATA9		&pcfg_default>,
+				<SYS_GPH_MFPL_PH2MFP_LCM_DATA10		&pcfg_default>,
+				<SYS_GPH_MFPL_PH3MFP_LCM_DATA11		&pcfg_default>,
+				<SYS_GPH_MFPL_PH4MFP_LCM_DATA12		&pcfg_default>,
+				<SYS_GPH_MFPL_PH5MFP_LCM_DATA13		&pcfg_default>,
+				<SYS_GPH_MFPL_PH6MFP_LCM_DATA14		&pcfg_default>,
+				<SYS_GPH_MFPL_PH7MFP_LCM_DATA15		&pcfg_default>,
+				<SYS_GPC_MFPH_PC12MFP_LCM_DATA16	&pcfg_default>,
+				<SYS_GPC_MFPH_PC13MFP_LCM_DATA17	&pcfg_default>,
+				<SYS_GPC_MFPH_PC14MFP_LCM_DATA18	&pcfg_default>,
+				<SYS_GPC_MFPH_PC15MFP_LCM_DATA19	&pcfg_default>,
+				<SYS_GPH_MFPH_PH12MFP_LCM_DATA20	&pcfg_default>,
+				<SYS_GPH_MFPH_PH13MFP_LCM_DATA21	&pcfg_default>,
+				<SYS_GPH_MFPH_PH14MFP_LCM_DATA22	&pcfg_default>,
+				<SYS_GPH_MFPH_PH15MFP_LCM_DATA23	&pcfg_default>;
 		};
 	};
 };

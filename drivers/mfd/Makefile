@@ -21,6 +21,8 @@ obj-$(CONFIG_MFD_EXYNOS_LPASS)	+= exynos-lpass.o
 obj-$(CONFIG_MFD_GATEWORKS_GSC)	+= gateworks-gsc.o
 
 obj-$(CONFIG_MFD_MA35D1)       += ma35d1-sysctl.o
+obj-$(CONFIG_MFD_MA35D0)       += ma35d0-sysctl.o
+obj-$(CONFIG_MFD_MA35H0)       += ma35h0-sysctl.o
 
 obj-$(CONFIG_MFD_TI_LP873X)	+= lp873x.o
 obj-$(CONFIG_MFD_TI_LP87565)	+= lp87565.o
