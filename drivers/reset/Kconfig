@@ -22,6 +22,20 @@ config RESET_MA35D1
 	  This enables the reset controller driver for MA35D1
 	  Say Y if you want to control reset signals provided by SYS registers.
 
+config RESET_MA35D0
+	bool "MA35D0 Reset Driver"
+	default ARCH_MA35D0
+	help
+	  This enables the reset controller driver for MA35D0
+	  Say Y if you want to control reset signals provided by SYS registers.
+
+config RESET_MA35H0
+	bool "MA35H0 Reset Driver"
+	default ARCH_MA35H0
+	help
+	  This enables the reset controller driver for MA35H0
+	  Say Y if you want to control reset signals provided by SYS registers.
+
 config RESET_A10SR
 	tristate "Altera Arria10 System Resource Reset"
 	depends on MFD_ALTERA_A10SR || COMPILE_TEST
@@ -156,6 +170,7 @@ config RESET_NUVOTON_MA35D1
 	default ARCH_MA35
 	help
 	  This enables the reset controller driver for Nuvoton MA35D1 SoC.
+	  
 
 config RESET_PISTACHIO
 	bool "Pistachio Reset Driver"

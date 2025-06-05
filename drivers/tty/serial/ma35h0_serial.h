@@ -1,14 +1,14 @@
 /* SPDX-License-Identifier: GPL-2.0+ */
 /*
  *
- *  MA35D1 serial driver header file
+ *  MA35H0 serial driver header file
  *
  *  Copyright (C) 2017 Nuvoton Technology Corp.
  *
  */
 
-#ifndef __MA35D1_SERIAL_H__
-#define __MA35D1_SERIAL_H__
+#ifndef __MA35H0_SERIAL_H__
+#define __MA35H0_SERIAL_H__
 
 #define UART_REG_RBR	0x00
 #define UART_REG_THR	0x00
@@ -112,13 +112,13 @@
 #define PDMA_UART16_TX 36
 #define PDMA_UART16_RX 37
 
-struct ma35d1_mem_alloc {
+struct ma35h0_mem_alloc {
 	u64		size;
 	u64		vir_addr;
 	dma_addr_t		phy_addr;
 };
 
-struct ma35d1_ip_rx_dma {
+struct ma35h0_ip_rx_dma {
 	struct dma_chan         *chan_rx;
 	struct scatterlist      sgrx[64];
 	struct dma_async_tx_descriptor  *rxdesc;
@@ -126,7 +126,7 @@ struct ma35d1_ip_rx_dma {
 	dma_cookie_t cookie;
 };
 
-struct ma35d1_ip_tx_dma {
+struct ma35h0_ip_tx_dma {
 	struct dma_chan         *chan_tx;
 	struct scatterlist      sgtx[64];
 	struct dma_async_tx_descriptor  *txdesc;

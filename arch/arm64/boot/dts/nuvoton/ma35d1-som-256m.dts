@@ -35,10 +35,10 @@
 			reg = <0x0 0x8A000000 0x0 0x800000>; /* 8MiB */
 			no-map;
 		};
-		rproc_buf: rproc_buf@0 {
-			reg = <0x0 0x80020000 0x0 0x60000>; /* 384KB */
-			no-map;
-		};
+//		rproc_buf: rproc_buf@0 {
+//			reg = <0x0 0x80020000 0x0 0x60000>; /* 384KB */
+//			no-map;
+//		};
 	};
 
 	gpio_keys_test {
@@ -84,7 +84,7 @@
 		default-brightness-level = <5>;
 		pwms = <&epwm1 1 50000>;
 		enable-gpios = <&gpiok 7 GPIO_ACTIVE_HIGH>;
-		status = "okay";
+		status = "disabled";
         };
 
 	volt0_sdhci1: regulator-volt0_sdhci1 {
@@ -103,130 +103,21 @@
 
 
 &ccap0 {
-	//clocks = <&clk CCAP0_GATE>;
-        status = "okay";
+    status = "disabled";
 	port {
-#if 1
-		ccap0_1: endpoint {
-			remote-endpoint = <&ov2659_0>;
-			bus-width = <8>;
-			hsync-active = <0>;     /* Active low */
-			vsync-active = <1>;     /* Active high */
-			pclk-sample = <1>;      /* Active high */
-		};
-#endif
-#if 0
-		ccap0_1: endpoint {
-			remote-endpoint = <&ov5640_0>;
-			bus-width = <8>;
-			hsync-active = <0>;     /* Active low */
-			vsync-active = <0>;     /* Active low */
-			pclk-sample = <1>;      /* Rising */
-		};
-#endif
-#if 0
 		ccap0_1: endpoint {
 			remote-endpoint = <&hm1055_0>;
 			hsync-active = <0>;     /* Active low */
 			vsync-active = <0>;     /* Active low */
 			pclk-sample = <1>;      /* Rising */
 		};
-#endif
 	};
 };
 
-#if 1
-&i2c_gpio0 {
-	status = "okay";
-#if 1
-	ov2659@30 {
-		compatible = "ovti,ov2659";
-		reg = <0x30>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_ccap0>;
-		clocks = <&clk CCAP0_GATE>;
-		clock-names = "xvclk";
-		reset-gpios = <&gpiom 1 GPIO_ACTIVE_LOW>; /* PM1 */
-		powerdown-gpios = <&gpiok 8 GPIO_ACTIVE_HIGH>; /* PK8 */
-		port {
-			ov2659_0: endpoint {
-				remote-endpoint = <&ccap0_1>;
-				bus-width = <8>;
-				hsync-active = <0>;     /* Active low */
-				vsync-active = <0>;     /* Active low */
-                	        pclk-sample = <1>;      /* Rising */
-				link-frequencies = /bits/ 64 <70000000>;
-				//link-frequencies = /bits/ 64 <48000000>;
-			};
-		};
-	};	
-#endif
-#if 0
-	ov5640@3c {
-		compatible = "ovti,ov5640";
-		reg = <0x3C>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_ccap0>;
-		clocks = <&clk CCAP0_GATE>;
-		clock-names = "xclk";
-		reset-gpios = <&gpiom 1 GPIO_ACTIVE_LOW>; /* PM1 */
-		powerdown-gpios = <&gpiok 8 GPIO_ACTIVE_HIGH>; /* PK8 */
-		port {
-			ov5640_0: endpoint {
-				remote-endpoint = <&ccap0_1>;
-				bus-width = <8>;
-	                       hsync-active = <0>;     /* Active low */
-        	               vsync-active = <0>;     /* Active low */
-                	        pclk-sample = <1>;      /* Rising */
-
-			};
-		};
-	};	
-#endif
-#if 0
-	hm1055@24 {
-		compatible = "himax,hm1055";
-		reg = <0x24>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_ccap0>;
-		clocks = <&clk CCAP0_GATE>;
-		clock-names = "xclk";
-		reset-gpios = <&gpiom 1 GPIO_ACTIVE_LOW>; /* PM1 */
-		powerdown-gpios = <&gpiok 8 GPIO_ACTIVE_HIGH>; /* PK8 */
-		port {
-			hm1055_0: endpoint {
-				remote-endpoint = <&ccap0_1>;
-			};
-		};
-	};
-#endif
-};
-#else
 &i2c3 {
-	status = "okay";
+	status = "disabled";
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_i2c3>;
-#if 1
-	ov5640@3c {
-		compatible = "ovti,ov5640";
-		reg = <0x3C>;
-		pinctrl-names = "default";
-		pinctrl-0 = <&pinctrl_ccap0>;
-		clocks = <&clk CCAP0_GATE>;
-		clock-names = "xclk";
-		reset-gpios = <&gpiom 1 GPIO_ACTIVE_LOW>; /* PM1 */
-		powerdown-gpios = <&gpiok 8 GPIO_ACTIVE_HIGH>; /* PK8 */
-		port {
-			ov5640_0: endpoint {
-				remote-endpoint = <&ccap0_1>;
-	                        hsync-active = <0>;     /* Active low */
-        	                vsync-active = <0>;     /* Active low */
-                	        pclk-sample = <1>;      /* Rising */
-
-			};
-		};
-	};
-#else
 	hm1055@24 {
 		compatible = "himax,hm1055";
 		reg = <0x24>;
@@ -242,9 +133,7 @@
 			};
 		};
 	};
-#endif
 };
-#endif
 
 &ccap1 {
         status = "disabled";
