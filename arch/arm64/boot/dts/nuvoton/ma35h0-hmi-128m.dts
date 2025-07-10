@@ -28,6 +28,7 @@
 
 	reserved-memory {
 		display_buf: display_buf@0 {
+			compatible = "shared-dma-pool";
 			reg = <0x0 0x84FF0000 0x0 0x1010000>; /* 17MiB */
 			no-map;
 		};

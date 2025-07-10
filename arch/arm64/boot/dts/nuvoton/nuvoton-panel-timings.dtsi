@@ -1,0 +1,166 @@
+/*
+ * Device Tree Source for MA35 Series Panel Timings
+ *
+ * Copyright (C) 2025 Nuvoton Technology Corp.
+ *
+ * Include this file in your board's DTS to enable legacy fb driver support.
+ *
+ * This file serves as a panel timing reference for the legacy framebuffer
+ * driver only. For users of the DRM driver who need to specify custom display
+ * timings, the "panel-timing" subnode should be defined inside the panel node.
+ * Referencing this "display-timings" node has "NO" effect when using DRM driver.
+ *
+ * http://www.opensource.org/licenses/gpl-license.html
+ * http://www.gnu.org/copyleft/gpl.html
+ */
+
+&display {
+	/* Optionally override for legacy FB driver compatibility */
+	compatible = "nuvoton,ma35d1-fb";
+
+	bits-per-pixel = <32>;
+	pixel-fmt = <6>;  /* 4:RGB565 6:RGB888 8:UYVY 17:NV12 */
+	swizzle = <0>;    /* 0:ARGB, 1:RGBA, 2:ABGR, 3:BGRA */
+	dpi-config = <5>; /* 0:D16CFG1, 1:D16CFG2, 2:D16CFG3, 3:D18CFG1, 4:D18CFG2, 5:D24 */
+
+	buffer-num = <3>;
+	colorkey-en = <1>;
+
+	/* Enable overlay function */
+	overlay-en = <1>;
+	overlay-pixel-fmt = <6>;
+	overlay-width = <1024>;
+	overlay-height = <600>;
+	overlay-rect-tlx = <0>;
+	overlay-rect-tly = <0>;
+
+	display-timings {
+		native-mode = <&timing0>;
+
+		timing0: 1024x600 {
+			clock-frequency = <51000000>;
+			hactive = <1024>;
+			vactive = <600>;
+			hsync-len = <1>;
+			hfront-porch = <160>;
+			hback-porch = <160>;
+			vsync-len = <1>;
+			vfront-porch  = <23>;
+			vback-porch = <12>;
+			hsync-active = <1>;
+			vsync-active = <1>;
+		};
+
+		timing1: 800x480 {
+			clock-frequency = <45000000>;
+			hactive = <800>;
+			vactive = <480>;
+			hsync-len = <1>;
+			hfront-porch = <210>;
+			hback-porch = <46>;
+			vsync-len = <1>;
+			vfront-porch  = <22>;
+			vback-porch = <23>;
+			hsync-active = <1>;
+			vsync-active = <1>;
+		};
+
+		timing2: 1920x1080 {
+			clock-frequency = <125000000>;
+			hactive = <1920>;
+			vactive = <1080>;
+			hsync-len = <32>;
+			hfront-porch = <120>;
+			hback-porch = <128>;
+			vsync-len = <14>;
+			vfront-porch  = <21>;
+			vback-porch = <10>;
+			hsync-active = <1>;
+			vsync-active = <1>;
+		};
+
+		timing3: 2lane_1920x1080 {
+			clock-frequency = <148000000>;
+			hactive = <1920>;
+			vactive = <1080>;
+			hsync-len = <160>;
+			hfront-porch = <32>;
+			hback-porch = <48>;
+			vsync-len = <31>;
+			vfront-porch  = <5>;
+			vback-porch = <3>;
+			hsync-active = <1>;
+			vsync-active = <1>;
+		};
+
+		timing4: 4lane_1920x1080 {
+			clock-frequency = <150000000>;
+			hactive = <1920>;
+			vactive = <1080>;
+			hsync-len = <92>;
+			hfront-porch = <32>;
+			hback-porch = <48>;
+			vsync-len = <134>;
+			vfront-porch  = <5>;
+			vback-porch = <3>;
+			hsync-active = <1>;
+			vsync-active = <1>;
+		};
+
+		timing5: hdmi_1920x1080 {
+			clock-frequency = <148500000>;
+			hactive = <1920>;
+			vactive = <1080>;
+			hsync-len = <44>;
+			hfront-porch = <88>;
+			hback-porch = <148>;
+			vsync-len = <5>;
+			vfront-porch  = <4>;
+			vback-porch = <36>;
+			hsync-active = <1>;
+			vsync-active = <1>;
+		};
+
+		timing6: mipi_1920x1200 {
+			clock-frequency = <148000000>;
+			hactive = <1920>;
+			vactive = <1200>;
+			hsync-len = <16>;
+			hfront-porch = <32>;
+			hback-porch = <16>;
+			vsync-len = <2>;
+			vfront-porch  = <15>;
+			vback-porch = <18>;
+			hsync-active = <1>;
+			vsync-active = <1>;
+		};
+
+		timing7: edp_1920x1080 {
+			clock-frequency = <148000000>;
+			hactive = <1920>;
+			vactive = <1080>;
+			hsync-len = <160>;
+			hfront-porch = <32>;
+			hback-porch = <48>;
+			vsync-len = <31>;
+			vfront-porch  = <5>;
+			vback-porch = <3>;
+			hsync-active = <0>;
+			vsync-active = <0>;
+		};
+
+		timing8: lvds_1920x1200 {
+			clock-frequency = <148000000>;
+			hactive = <1920>;
+			vactive = <1200>;
+			hsync-len = <16>;
+			hfront-porch = <32>;
+			hback-porch = <16>;
+			vsync-len = <2>;
+			vfront-porch  = <15>;
+			vback-porch = <18>;
+			hsync-active = <0>;
+			vsync-active = <0>;
+		};
+	};
+};

@@ -1451,65 +1451,52 @@
 		status = "disabled";
 	};
 
+	panel: panel {
+		/* refer to panel-simple.yaml for supported compatible strings for panels */
+		compatible = "avic,tm070ddh03", "panel-dpi";
+
+		port {
+			panel_in: endpoint@0 {
+				remote-endpoint = <&dpi_out>;
+			};
+		};
+	};
+
 	display: display@40260000 {
-		compatible = "nuvoton,ma35d0-fb";
+		compatible = "nuvoton,ma35d0-drm";
 		reg = <0x0 0x40260000 0x0 0x2000>;
 		interrupts = <GIC_SPI 20 IRQ_TYPE_LEVEL_HIGH>;
 		nuvoton,clk = <&clk>;
 		clocks = <&clk DCU_GATE>, <&clk DCUP_DIV>;
 		clock-names = "dcu_gate", "dcup_div";
-		resets = <&reset MA35D0_RESET_DISP>;
-		//pwr-gpios = <&gpiok 5 GPIO_ACTIVE_HIGH>; //LVDS pwr-enable pin
+		resets = <&reset MA35D1_RESET_DISP>;
 		status = "disabled";
 
-		reset_offset_en = "no";
+		layers {
+				#address-cells = <1>;
+				#size-cells = <0>;
 
-		//RGB interface
-		bits-per-pixel = <32>;
-		pixel-fmt = <6>; //4:RGB565 6:RGB888 8:UYVY 17:NV12
-		swizzle = <0>;//0:ARGB, 1:RGBA, 2:ABGR, 3:BGRA
-		dpi-config = <5>;//0:D16CFG1, 1:D16CFG2, 2:D16CFG3, 3:D18CFG1, 4:D18CFG2, 5:D24
+				layer@0 {
+					layer-id = <0>;
+					layer-type = "primary";
+				};
 
-		buffer-num = <3>;
-		colorkey-en = <1>;
+				layer@1 {
+					layer-id = <1>;
+					layer-type = "overlay";
+				};
 
-		//Enable overlay function
-		overlay-en = <1>;
-		overlay-pixel-fmt = <6>;
-		overlay-width = <1024>;
-		overlay-height = <600>;
-		overlay-rect-tlx = <0>;
-		overlay-rect-tly = <0>;
+				layer@2 {
+					layer-id = <2>;
+					layer-type = "cursor";
+					HOTSPOT_X = <0>;
+					HOTSPOT_Y = <0>;
+				};
+		};
 
-		display-timings {
-			native-mode = <&timing0>;
-
-			timing0: 1024x600 {
-				clock-frequency = <51000000>;//pixel clock(pixclock)
-				hactive = <1024>;
-				vactive = <600>;
-				hsync-len = <1>;
-				hfront-porch = <160>;
-				hback-porch = <160>;
-				vsync-len = <1>;
-				vfront-porch  = <23>;
-				vback-porch = <12>;
-				hsync-active = <1>;
-				vsync-active = <1>;
-			};
-
-			timing1: 800x480 {
-				clock-frequency = <45000000>;
-				hactive = <800>;
-				vactive = <480>;
-				hsync-len = <1>;
-				hfront-porch = <210>;
-				hback-porch = <46>;
-				vsync-len = <1>;
-				vfront-porch  = <22>;
-				vback-porch = <23>;
-				hsync-active = <1>;
-				vsync-active = <1>;
+		port {
+			dpi_out: endpoint@0 {
+				remote-endpoint = <&panel_in>;
 			};
 		};
 	};
