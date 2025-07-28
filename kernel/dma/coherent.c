@@ -129,6 +129,7 @@ int dma_declare_coherent_memory(struct device *dev, phys_addr_t phys_addr,
 		_dma_release_coherent_memory(mem);
 	return ret;
 }
+EXPORT_SYMBOL(dma_declare_coherent_memory);
 
 void dma_release_coherent_memory(struct device *dev)
 {
@@ -195,6 +196,7 @@ int dma_alloc_from_dev_coherent(struct device *dev, ssize_t size,
 	*ret = __dma_alloc_from_coherent(dev, mem, size, dma_handle);
 	return 1;
 }
+EXPORT_SYMBOL(dma_alloc_from_dev_coherent);
 
 static int __dma_release_from_coherent(struct dma_coherent_mem *mem,
 				       int order, void *vaddr)
@@ -230,6 +232,7 @@ int dma_release_from_dev_coherent(struct device *dev, int order, void *vaddr)
 
 	return __dma_release_from_coherent(mem, order, vaddr);
 }
+EXPORT_SYMBOL(dma_release_from_dev_coherent);
 
 static int __dma_mmap_from_coherent(struct dma_coherent_mem *mem,
 		struct vm_area_struct *vma, void *vaddr, size_t size, int *ret)
