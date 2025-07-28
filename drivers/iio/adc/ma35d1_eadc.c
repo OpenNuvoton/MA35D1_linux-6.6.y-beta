@@ -233,8 +233,6 @@ static int ma35d1_adc_chan_of_init(struct iio_dev *indio_dev)
 {
 	struct device_node *node = indio_dev->dev.of_node;
 	struct ma35d1_adc_diff_channel diff[EADC_CH_MAX];
-	struct property *prop;
-	const __be32 *cur;
 	struct iio_chan_spec *channels;
 	int scan_index = 0, num_channels = 0, num_diff = 0, ret, i;
 	u32 val;
@@ -273,7 +271,7 @@ static int ma35d1_adc_chan_of_init(struct iio_dev *indio_dev)
 	if (!channels)
 		return -ENOMEM;
 
-	of_property_for_each_u32(node, "eadc-channels", prop, cur, val) {
+	of_property_for_each_u32(node, "eadc-channels", val) {
 		if (val >= EADC_CH_MAX) {
 			dev_err(&indio_dev->dev, "Invalid channel %d\n", val);
 			return -EINVAL;
